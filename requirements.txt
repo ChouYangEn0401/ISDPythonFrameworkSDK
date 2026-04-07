@@ -1,0 +1,4 @@
+# dev / build dependencies
+build>=1.0
+setuptools>=61.0
+wheel
