@@ -1,8 +1,6 @@
-from hyper_framework.base.Singleton import SingletonMetaclass as SingletonMetaclass
-from typing import TYPE_CHECKING, Literal
-
-if TYPE_CHECKING:
-    from tkinter import Text
+from src.hyper_framework.CuriouslyRecurringTemplatePattern.Singleton import SingletonMetaclass as SingletonMetaclass
+from tkinter import Text
+from typing import Literal
 
 class SingletonSystemLogger(metaclass=SingletonMetaclass):
     LogLevelLiteral = Literal[

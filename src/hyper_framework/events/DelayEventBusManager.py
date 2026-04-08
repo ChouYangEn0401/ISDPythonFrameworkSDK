@@ -58,8 +58,9 @@ class DelayEventBusManager:
         weak_callback = weakref.WeakMethod(callback)
         for wm in target_list:
             # wm 是 weakref.WeakMethod 物件，透過 .__eq__ 可以比較
-            if wm is None or wm == weak_callback:
+            if wm == weak_callback:
                 target_list.remove(wm)
+                break
 
 
     def Evoke(self, event_class_type: Union[Type[IDelayEventBase], Type[IDelayParsEventBase]]):

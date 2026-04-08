@@ -1,16 +1,14 @@
 import os
+from tkinter import Text
 from datetime import datetime
-from typing import Optional, Literal, TYPE_CHECKING
+from typing import Optional, Literal
 
 from colorama import Fore, Style, init as colorama_init
-from hyper_framework.base.Singleton import SingletonMetaclass
+from src.hyper_framework.CuriouslyRecurringTemplatePattern.Singleton import SingletonMetaclass
 
 # 初始化 colorama（讓 Windows 也能顯示 ANSI 色碼）
 colorama_init()
 _CURRENT_RUN_MODE = os.environ.get("RUN_MODE", "DEBUG")
-
-if TYPE_CHECKING:
-    from tkinter import Text
 
 
 class SingletonSystemLogger(metaclass=SingletonMetaclass):
@@ -40,7 +38,7 @@ class SingletonSystemLogger(metaclass=SingletonMetaclass):
         self._output_mode = "console"  # console | file | both
         self._log_file = "app.log"
         self._enabled = True
-        self._tk_window: Optional["Text"] = None
+        self._tk_window: Optional[Text] = None
 
         self._level_order = {
             "DEBUG": 10,  # 詳細除錯，開發階段有用，平時不顯示

@@ -42,7 +42,7 @@ def __module_debugger():
         print(f"Debug: '{current_module_path}' 正在首次載入中 (尚未完全進入 sys.modules)。")
 
 
-if os.environ.get("EVENT_MANAGER_DEBUGGER"):
+if SingletonEnvManager().get_env("EVENT_MANAGER_DEBUGGER"):
     # 立即執行診斷函數
     __module_debugger()
 
@@ -60,5 +60,5 @@ def __debugger():
     print(f"Events.py's IParsEventBase ID: {id(IParsEventBase)}, Module: {IParsEventBase.__module__}")
     print(f"Events.py's OnModuleD_MainWindowTreeviewUpdate ID: {id(OnModuleD_MainWindowTreeviewUpdate)}, Module: {OnModuleD_MainWindowTreeviewUpdate.__module__}")
 
-if os.environ.get("EVENT_MANAGER_DEBUGGER"):
+if SingletonEnvManager().get_env("EVENT_MANAGER_DEBUGGER"):
     __debugger()
