@@ -1,8 +1,12 @@
 from typing import Any
 from dataclasses import dataclass
 
-from src.hyper_framework.api.APICaller import ICommand
-from src.hyper_framework.events.Events import IParsEventBase, IEventBase
+try:
+    from hyper_framework.api.APICaller import ICommand  # optional consumer API interface
+except Exception:
+    ICommand = Any
+
+from hyper_framework.events.Events import IParsEventBase, IEventBase
 
 
 @dataclass
