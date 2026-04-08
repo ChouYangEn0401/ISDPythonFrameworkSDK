@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "isd-python-framework"
-version = "0.0.1"
+version = "0.1.0"
 description = "ISD Python Framework — The foundational base framework for ISD module development"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,7 +13,9 @@ authors = [
     { name = "周暘恩", email = "chouyangen0401@ntu.edu.tw" },
     { name = "Anthony Chou", email = "mi.anthony.chou@gmail.com" },
 ]
-dependencies = []
+dependencies = [
+    "colorama>=0.4.6",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -26,6 +28,15 @@ where = ["src"]
 dev = [
     "pytest>=7.0",
     "black>=24.0",
+]
+# pip install isd-python-framework[excel]
+excel = [
+    "openpyxl>=3.1",
+    "pandas>=2.0",
+]
+# pip install isd-python-framework[all]
+all = [
+    "isd-python-framework[dev,excel]",
 ]
 
 [project.scripts]
