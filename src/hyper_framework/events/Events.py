@@ -1,9 +1,9 @@
-from typing import Dict, Tuple, Literal
+import os
 import pandas as pd
+from typing import Dict, Tuple, Literal
 from dataclasses import dataclass
 
-from src.hyper_framework.app_env_settings.EnvironmentVariable import SingletonEnvManager
-from src.hyper_framework.events.EventBase import IEventBase, IParsEventBase
+from hyper_framework.events.EventBase import IEventBase, IParsEventBase
 
 
 def __module_debugger():
@@ -45,55 +45,6 @@ def __module_debugger():
 if SingletonEnvManager().get_env("EVENT_MANAGER_DEBUGGER"):
     # 立即執行診斷函數
     __module_debugger()
-
-
-## Treeview Update In Main-Window
-@dataclass
-class OnModuleD_MainWindowTreeviewUpdate(IParsEventBase):
-    dfs: Dict[Tuple[str, str, str, str], pd.DataFrame]
-@dataclass
-class OnModuleD_ResultTreeviewUpdate(IParsEventBase):
-    dfs: Dict[Tuple[str, str, str, str], pd.DataFrame]
-@dataclass
-class OnModuleF_MainWindowTreeviewUpdate(IParsEventBase):
-    dfs: Dict[Tuple[str, str, str, str], pd.DataFrame]
-@dataclass
-class OnModuleF_ResultTreeviewUpdate(IParsEventBase):
-    dfs: Dict[Tuple[str, str, str, str], pd.DataFrame]
-@dataclass
-class OnModuleH_MainWindowTreeviewUpdate(IParsEventBase):
-    dfs: Dict[Tuple[str, str, str, str], pd.DataFrame]
-@dataclass
-class OnModuleH_ResultTreeviewUpdate(IParsEventBase):
-    dfs: Dict[Tuple[str, str, str, str], pd.DataFrame]
-
-## Module H Events
-class OnModuleH_MergeTableBase(IEventBase): pass
-class ModuleH_OnRefill(OnModuleH_MergeTableBase): pass
-class ModuleH_OnRefillDf1(ModuleH_OnRefill): pass
-class ModuleH_OnRefillDf2(ModuleH_OnRefill): pass
-class ModuleH_OnInnerMerge(OnModuleH_MergeTableBase): pass
-class ModuleH_OnGetYesResult(OnModuleH_MergeTableBase): pass
-
-class OnFSMUpdate(IEventBase): pass
-class OnFSMUpdate1(OnFSMUpdate): pass
-class OnFSMUpdate2(OnFSMUpdate): pass
-class OnFSMUpdate3(OnFSMUpdate): pass
-class OnFSMUpdate4(OnFSMUpdate): pass
-
-@dataclass
-class OnTableCheckboxSelected(IParsEventBase):
-    module_key: str
-    column_name: str
-    is_selected: bool
-class OnATableCheckboxSelected(IEventBase): pass
-class OnBTableCheckboxSelected(IEventBase): pass
-class OnCTableCheckboxSelected(IEventBase): pass
-class OnDTableCheckboxSelected(IEventBase): pass
-class OnFTableCheckboxSelected(IEventBase): pass
-class OnGTableCheckboxSelected(IEventBase): pass
-class OnHTableCheckboxSelected(IEventBase): pass
-
 
 @dataclass
 class OnMainWindow1_TreeviewUpdateWithNewDF(IParsEventBase):

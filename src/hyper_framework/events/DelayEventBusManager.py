@@ -1,13 +1,8 @@
 import weakref
-from typing import Callable, Dict, List, Type, Union
 from abc import ABC, abstractmethod
+from typing import Callable, Dict, List, Type, Union
 
-
-class IDelayEventBase(ABC):
-    pass
-
-class IDelayParsEventBase(ABC):
-    pass
+from hyper_framework.events.DelayEventBase import IDelayEventBase, IDelayParsEventBase
 
 
 class LazyListenerBase(ABC):

@@ -1,10 +1,10 @@
-from weakref import WeakMethod
+import os
+import weakref
 from collections import defaultdict
-from typing import Callable, Dict, List, Type, Union, overload
+from typing import Callable, Dict, List, Optional, Type, Union, overload
 
-## 路徑要寫一樣(src都要寫)，不然python會把他當成兩種物件，導致解析的時候出現不同，然後就會整個炸掉
-from src.hyper_framework.app_env_settings.EnvironmentVariable import SingletonEnvManager
-from src.hyper_framework.events.Events import IEventBase, IParsEventBase
+from hyper_framework.events.EventBase import IEventBase, IParsEventBase
+
 
 
 class SingletonEventManager:
