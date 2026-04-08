@@ -42,23 +42,18 @@ def __module_debugger():
         print(f"Debug: '{current_module_path}' 正在首次載入中 (尚未完全進入 sys.modules)。")
 
 
-if SingletonEnvManager().get_env("EVENT_MANAGER_DEBUGGER"):
+env_text = os.environ.get("EVENT_MANAGER_DEBUGGER")
+
+
+if env_text in ["True", "true", "1"]:
     # 立即執行診斷函數
     __module_debugger()
-
-@dataclass
-class OnMainWindow1_TreeviewUpdateWithNewDF(IParsEventBase):
-    module_name: str
-    new_df: pd.DataFrame
-    run_mode: Literal["append", "replace"]
-
 
 def __debugger():
     # --- Debugging Info ---
     print(f"\n--- Debugging Events.py Load ---")
     print(f"Events.py's IEventBase ID: {id(IEventBase)}, Module: {IEventBase.__module__}")
     print(f"Events.py's IParsEventBase ID: {id(IParsEventBase)}, Module: {IParsEventBase.__module__}")
-    print(f"Events.py's OnModuleD_MainWindowTreeviewUpdate ID: {id(OnModuleD_MainWindowTreeviewUpdate)}, Module: {OnModuleD_MainWindowTreeviewUpdate.__module__}")
 
-if SingletonEnvManager().get_env("EVENT_MANAGER_DEBUGGER"):
+if env_text in ["True", "true", "1"]:
     __debugger()
