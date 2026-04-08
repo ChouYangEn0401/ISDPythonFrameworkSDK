@@ -66,10 +66,13 @@ from hyper_framework import SingletonMetaclass
 
 class MyManager(metaclass=SingletonMetaclass):
     def _initialize_manager(self):
+        # 單例首次建立時執行一次
         self.data = []
 
 a = MyManager()
 b = MyManager()
+print(a)
+print(b)
 assert a is b  # True
 ```
 
@@ -125,8 +128,12 @@ class Worker:
     def on_done(self):
         print("Job done!")
 
-    def on_progress(self, e: OnProgress):
-        print(f"Progress: {e.percent:.0%}")
+    def on_inner_progress(self, e: OnProgress):
+        print(f"Inner Progress: {e.percent:.0%}")
+
+    @staticmethod
+    def on_progress(e: OnProgress):
+        print(f"On Progress: {e.percent:.0%}")
 
     def subscribe(self):
         em.RegisterEvent(OnJobDone, self.on_done)
@@ -140,11 +147,34 @@ class Worker:
 def handle_done():
     print("Done (plain function)!")
 
-em.RegisterEvent(OnJobDone, handle_done)
 
-# 觸發
+print("=== OnJobDone ===")
+em.RegisterEvent(OnJobDone, handle_done)
 em.TriggerEvent(OnJobDone())
+em.UnregisterEvent(OnJobDone, handle_done)
+
+print("=== OnProgress ===")
+em.RegisterEvent(OnProgress, Worker.on_progress)
 em.TriggerEvent(OnProgress(percent=0.75))
+em.UnregisterEvent(OnProgress, Worker.on_progress)
+
+print("=== Worker Events ===")
+w = Worker()
+w.subscribe()
+em.RegisterEvent(OnProgress, w.on_inner_progress)
+em.TriggerEvent(OnJobDone())
+em.TriggerEvent(OnProgress(percent=0.5))
+```
+
+```
+=== OnJobDone ===
+Done (plain function)!
+=== OnProgress ===
+On Progress: 75%
+=== Worker Events ===
+Job done!
+On Progress: 50%
+Inner Progress: 50%
 ```
 
 **除錯模式：** 設定環境變數 `EVENT_MANAGER_DEBUGGER=1` 可印出詳細的事件類型解析資訊。
