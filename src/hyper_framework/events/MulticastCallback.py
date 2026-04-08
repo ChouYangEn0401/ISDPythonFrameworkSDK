@@ -10,7 +10,7 @@ from typing import List, TypeVar, Generic, Callable, Any
 
 # --- 通用的 Callback 管理器 (使用 Generic 和 TypeVar) ---
 T_Callable = TypeVar('T_Callable', bound=Callable[..., Any]) # bound=Callable[..., Any] 表示 T_Callable 必須是一個可呼叫的物件
-class GenericCallbacksClass(Generic[T_Callable]):
+class MulticastCallback(Generic[T_Callable]):
     """
         T_Callable 是一個 TypeVar，用來表示任何 Callable 型別
         ParamSpec 可以更精確地綁定參數簽名，但在這裡使用 Callable[..., Any] 更通用一些
@@ -19,9 +19,12 @@ class GenericCallbacksClass(Generic[T_Callable]):
         P = ParamSpec('P')
         T_Callable = TypeVar('T_Callable', bound=Callable[P, Any])
     """
+    @property
+    def callbacks(self) -> List[T_Callable]:
+        return self._callbacks.copy()
 
-    def __init__(self, b_debug_print = False):
-        self._callbacks: List[T_Callable] = []
+    def __init__(self, _callbacks: List[T_Callable] = None, b_debug_print: bool = False):
+        self._callbacks: List[T_Callable] = _callbacks if _callbacks is not None else []
         self.b_debug_print = b_debug_print
 
     def add(self, callback: T_Callable):
@@ -36,26 +39,25 @@ class GenericCallbacksClass(Generic[T_Callable]):
             self._callbacks.remove(callback)
 
     # 重載加法運算子，用於合併兩個 GenericCallbacksClass
-    def __add__(self, other: 'GenericCallbacksClass[T_Callable]') -> 'GenericCallbacksClass[T_Callable]':
+    def __add__(self, other: 'MulticastCallback[T_Callable]') -> 'MulticastCallback[T_Callable]':
         """
             直覺來看，會覺得是把兩個相當的東西做加總(例如單位相同)，所以具有對稱性與交換率。
             所以應該選用 GenericCallbacksClass[T_Callable]，也就是 self 的 Type。
         """
-        if not isinstance(other, GenericCallbacksClass):
+        if not isinstance(other, MulticastCallback):
             return NotImplemented
-        new_manager = GenericCallbacksClass[T_Callable]()  ## 不可變性 / Immutability, 確保 z = x + y 是新物件返回而非修改 x
-        new_manager._callbacks.extend(self._callbacks)
-        new_manager._callbacks.extend(other._callbacks)
+        new_manager = MulticastCallback[T_Callable](self._callbacks.copy())  ## 不可變性 / Immutability, 確保 z = x + y 是新物件返回而非修改 x
+        # Extend callbacks from other (preserve immutability)
+        new_manager._callbacks.extend(other.callbacks)
         return new_manager
 
     # 重載減法運算子，用於從管理器中移除 callback
-    def __sub__(self, callback_to_remove: T_Callable) -> 'GenericCallbacksClass[T_Callable]':
+    def __sub__(self, callback_to_remove: T_Callable) -> 'MulticastCallback[T_Callable]':
         if not isinstance(callback_to_remove, Callable): # 這裡判斷 Callable 比較泛
             return NotImplemented
-        new_manager = GenericCallbacksClass[T_Callable]()  ## 不可變性 / Immutability, 確保 z = x - y 是新物件返回而非修改 x
-        for cb in self._callbacks:
-            if cb != callback_to_remove:
-                new_manager._callbacks.append(cb)
+        new_manager = MulticastCallback[T_Callable](
+            [cb for cb in self._callbacks if cb != callback_to_remove]
+        )  ## 不可變性 / Immutability, 確保 z = x - y 是新物件返回而非修改 x
         return new_manager
 
     # __call__ 方法現在可以接受任何參數，並將這些參數傳遞給所有註冊的 callback
@@ -91,23 +93,29 @@ if __name__ == "__main__":
         print(f"Processing item '{item_name}', active: {is_active}")
 
     # 創建一個管理無參數 callback 的管理器
-    manager_no_args = GenericCallbacksClass[Callable[[], None]]()
+    manager_no_args = MulticastCallback[Callable[[], None]]()
     manager_no_args.add(greet)
     manager_no_args() # 執行：Hello!
 
     # 創建一個管理帶一個 int 參數 callback 的管理器
-    manager_int_arg = GenericCallbacksClass[Callable[[int], None]]()
+    manager_int_arg = MulticastCallback[Callable[[int], None]]()
     manager_int_arg.add(show_number)
     manager_int_arg(123) # 執行：The number is: 123
 
     # 創建一個管理帶 str 和 bool 參數 callback 的管理器
-    manager_item_args = GenericCallbacksClass[Callable[[str, bool], None]]()
+    manager_item_args = MulticastCallback[Callable[[str, bool], None]]()
     manager_item_args.add(process_item)
     manager_item_args("Laptop", True) # 執行：Processing item 'Laptop', active: True
 
-    # 注意：嘗試將不符簽名的 callback 加入會被靜態型別檢查器警告
-    # manager_no_args.add(show_number) # MyPy 警告: Argument "callback" to "add" of "GenericCallbacksClass" has incompatible type "Callable[[int], None]"; expected "Callable[[], None]"
-
+    # 注意：嘗試將不符簽名的 callback 加入會被 PyCharm 靜態型別檢查器警告
+    # MyPy 警告: Argument "callback" to "add" of "MulticastCallback" has incompatible type "Callable[[int], None]"; expected "Callable[[], None]"
+    try:
+        manager_no_args.add(show_number)
+    except TypeError as e:
+        print(f"錯誤：無法合併不同類型的 MulticastCallback: {e}")
     # 合併不同 Generic 類型的管理器會被 MyPy 警告，因為它們的 TypeVar 不匹配
-    # combined_m = manager_no_args + manager_int_arg # MyPy 警告
+    try:
+        combined_m = manager_no_args + manager_int_arg # MyPy 警告
+    except TypeError as e:
+        print(f"錯誤：無法合併不同類型的 MulticastCallback: {e}")
 

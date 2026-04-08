@@ -6,7 +6,7 @@ from .base.Singleton import SingletonMetaclass
 from .events.EventBase import IEventBase, IParsEventBase
 from .events.EventManager import SingletonEventManager
 from .events.DelayEventBusManager import DelayEventBusManager, IDelayEventBase, IDelayParsEventBase
-from .events.CustomCallbackClass import GenericCallbacksClass
+from .events.MulticastCallback import MulticastCallback
 from .message_logger.SingletonSystemLogger import SingletonSystemLogger
 from .decorators.decorators_pack import function_timer, timed_and_conditional_return, deprecated, battered
 from .exceptions.exceptions import (
@@ -27,7 +27,7 @@ __all__ = [
     "IDelayEventBase",
     "IDelayParsEventBase",
     "DelayEventBusManager",
-    "GenericCallbacksClass",
+    "MulticastCallback",
     # logger
     "SingletonSystemLogger",
     # decorators

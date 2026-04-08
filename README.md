@@ -208,29 +208,55 @@ class LateModule:
 
 ---
 
-### `GenericCallbacksClass`
+### `MulticastCallback`
 
-通用的 callback 集合管理器，支援直接呼叫、加法合併、減法移除。
+通用的 callback 多播集合（Multicast），適合把多個處理器（例如：日誌、UI 更新、度量收集）綁在同一事件上。
+支持直接呼叫、合併（回傳新物件）以及以單一 callback 為單位移除。
 
 ```python
-from hyper_framework import GenericCallbacksClass
-from typing import Callable
+from hyper_framework import MulticastCallback
+from typing import Callable, List
 
-on_update: GenericCallbacksClass[Callable[[int], None]] = GenericCallbacksClass()
+# 實務範例：多個 handler 回應進度更新
+on_progress: MulticastCallback[Callable[[int], None]] = MulticastCallback()
 
-def handler_a(x: int): print(f"A: {x}")
-def handler_b(x: int): print(f"B: {x}")
+def log_progress(p: int):
+    print(f"[LOG] progress={p}/100")
 
-on_update.add(handler_a)
-on_update.add(handler_b)
-on_update(42)  # 呼叫所有已註冊的 callback
+def update_ui(p: int):
+    print(f"UI -> Progress bar set to {p}%")
 
-on_update.remove(handler_a)
+metrics: List[int] = []
+def collect_metric(p: int):
+    metrics.append(p)
+    print(f"[METRIC] collected {p/100:.2%}")
 
-# 運算子支援
-combined = on_update + GenericCallbacksClass()  # 合併（回傳新物件）
-trimmed = on_update - handler_b               # 移除（回傳新物件）
+# 註冊 handlers
+on_progress.add(collect_metric)  ## for data collecting
+on_progress.add(log_progress)  ## for terminal debug
+on_progress.add(update_ui)  ## for user interface
+
+print("=== ALL ===")
+# 廣播（所有已註冊的 handler 都會被呼叫）
+on_progress(10)
+
+print("\n=== AFTER REMOVAL ===")
+# 移除某個 handler（- 回傳新 MulticastCallback；如要生效請重新指派或覆寫）
+on_progress = on_progress - update_ui
+on_progress(50)
+
+print("\n=== COMBINED ===")
+# 合併兩個 MulticastCallback（回傳新物件，不改變原本的 operands）
+extra = MulticastCallback[Callable[[int], None]]()
+extra.add(lambda p: print(f"extra handler: {p}"))
+combined = on_progress + extra
+combined(75)
+
+print("\n=== RESULTS ===")
+print("metrics:", metrics)
 ```
+
+注意：`+` / `-` 運算子會回傳新物件；若要修改現有變數，請把結果重新指派回原變數（如範例所示）。
 
 ---
 
