@@ -262,49 +262,196 @@ print("metrics:", metrics)
 
 ## `message_logger` — 系統日誌
 
-### `SingletonSystemLogger`
+### 架構概覽
 
-全域單例彩色日誌系統，支援等級過濾、多輸出模式（console / file / tkinter widget）。
+```
+SingletonSystemLogger（單例 orchestrator）
+ ├── LoggerBase            格式化 + 全域 RUN_MODE 過濾 + adapter fan-out
+ └── Adapters（可自由組合）
+      ├── DarkThemeTerminalAdapter   (level_filter=DEBUG)   → 彩色 console（深色主題）
+      ├── LightThemeTerminalAdapter  (level_filter=DEBUG)   → 彩色 console（淺色主題）
+      ├── FileAdapter                (level_filter=WARNING) → 本機日誌檔案
+      ├── DarkThemeTkinterAdapter    (level_filter=INFO)    → Tkinter Text widget（深色主題）
+      └── LightThemeTkinterAdapter   (level_filter=INFO)    → Tkinter Text widget（淺色主題）
+```
 
-**Log Levels（由低到高）：**
+**責任切分：**
+- `LoggerBase` — 格式化訊息、全域 `RUN_MODE` 過濾、管理 adapter 清單、fan-out 廣播
+- 各 `Adapter` — 持有自己的 `level_filter`，自行決定是否輸出，互相獨立
 
-| Level | 用途 |
-|---|---|
-| `DEBUG` | 開發時詳細追蹤資訊 |
-| `INFO` | 正常流程資訊 |
-| `CHECKPOINT` | 關鍵流程節點 |
-| `SUCCESS` | 操作成功 |
-| `WARNING` | 潛在問題，不影響運行 |
-| `ERROR` | 操作失敗，需修正 |
-| `CRITICAL` | 致命錯誤，系統無法繼續 |
-| `HIGHLIGHT` | 超醒目標記 |
+---
+
+### Log Levels（由低到高）
+
+| Level | 數值 | 用途 |
+|---|---|---|
+| `DEBUG` | 10 | 開發時詳細追蹤資訊 |
+| `INFO` | 20 | 正常流程資訊 |
+| `CHECKPOINT` | 22 | 關鍵流程節點 |
+| `SUCCESS` | 25 | 操作成功 |
+| `WARNING` | 30 | 潛在問題，不影響運行 |
+| `ERROR` | 40 | 操作失敗，需修正 |
+| `CRITICAL` | 50 | 致命錯誤，系統無法繼續 |
+| `HIGHLIGHT` | 60 | 超醒目標記 |
+
+---
+
+### 基本使用
 
 ```python
-from hyper_framework import SingletonSystemLogger
+from hyper_framework.message_logger import (
+    SingletonSystemLogger,
+    DarkThemeTerminalAdapter,
+    FileAdapter,
+    TkinterAdapter,
+)
+from pathlib import Path
 
 logger = SingletonSystemLogger()
 
-# 基本用法
+# 1. 組合輸出 adapter
+logger.register_adapter(DarkThemeTerminalAdapter("DEBUG"))          # terminal 顯示 DEBUG 以上
+logger.register_adapter(FileAdapter("WARNING", Path("app.log")))    # 檔案只寫 WARNING 以上
+
+# 2. 輸出訊息
 logger.log("系統啟動完成", level="INFO")
 logger.log("資料載入成功", level="SUCCESS")
-logger.shiny_log("關鍵里程碑", level="CHECKPOINT")
+logger.shiny_log("關鍵里程碑", level="CHECKPOINT")  # ✨ 裝飾 + 亮色
 
-# 設定
-logger.set_min_level("WARNING")   # 只顯示 WARNING 以上
-logger.set_output_mode("both")    # 同時輸出 console + file
-logger.set_log_file("app.log")
-logger.disable()                  # 暫停輸出
-logger.enable()
+# 快捷方法
+logger.debug("詳細追蹤")
+logger.info("正常流程")
+logger.checkpoint("檢查點")
+logger.success("成功")
+logger.warning("警告")
+logger.error("錯誤")
+logger.critical("致命")
+logger.highlight("超醒目")
 
-# tkinter 整合（選用）
-# logger.set_window(my_text_widget)
+# 全域開關（不影響 adapter 設定）
+logger.disable_broadcast_msg()
+logger.enable_broadcast_msg()
+
+# 管理 adapter
+logger.unregister_adapter(some_adapter)
+logger.clear_adapters()
 ```
 
-**環境變數控制：**
-- `RUN_MODE=DEBUG`（預設） — 顯示所有等級
-- `RUN_MODE=DISPLAY` — 顯示 INFO 以上
-- `RUN_MODE=RUN` — 僅顯示 ERROR
-- `CONSOLE_BG=light|dark` — 調整 console 顏色主題
+---
+
+### Adapter：`TerminalAdapter`
+
+```python
+from hyper_framework.message_logger import DarkThemeTerminalAdapter, LightThemeTerminalAdapter
+
+# 深色主題，顯示 DEBUG 以上
+adapter = DarkThemeTerminalAdapter("DEBUG")
+
+# 淺色主題，只顯示 WARNING 以上
+adapter = LightThemeTerminalAdapter("WARNING")
+
+# 隨時調整過濾等級
+adapter.set_filtered_level("INFO")
+```
+
+---
+
+### Adapter：`FileAdapter`
+
+```python
+from hyper_framework.message_logger import FileAdapter
+from pathlib import Path
+
+# 只寫 WARNING 以上
+adapter = FileAdapter("WARNING", Path("logs/app.log"))
+```
+
+---
+
+### Adapter：`TkinterAdapter`
+
+提供深色與淺色兩種主題，自動替每個 log 等級設定 Tkinter Text **tag** 顏色（含 `_SHINE` 粗體變體）。
+
+```python
+import tkinter as tk
+from hyper_framework.message_logger import (
+    DarkThemeTkinterAdapter,
+    LightThemeTkinterAdapter,
+    SingletonSystemLogger,
+)
+
+root = tk.Tk()
+text = tk.Text(root)
+text.pack()
+
+logger = SingletonSystemLogger()
+
+# 深色主題：顯示 INFO 以上
+logger.register_adapter(DarkThemeTkinterAdapter("INFO", tk_window=text))
+
+# 或淺色主題
+# logger.register_adapter(LightThemeTkinterAdapter("INFO", tk_window=text))
+```
+
+**Tag 顏色對應（深色 / 淺色）：**
+
+| Level | Dark theme | Light theme |
+|---|---|---|
+| `DEBUG` | `#5599ff` | `#0000cc` |
+| `INFO` | `#ffffff` | `#000000` |
+| `CHECKPOINT` | `#66ffff` | `#007777` |
+| `SUCCESS` | `#66ff66` | `#228B22` |
+| `WARNING` | `#ffcc00` | `#aa007f` |
+| `ERROR` | `#ff4444` | `#cc0000` |
+| `CRITICAL` | `#ff44ff` | `#880088` |
+| `HIGHLIGHT` | `#ffff33` | `#0055ff` |
+
+`shiny_log()` 使用 `<LEVEL>_SHINE` tag，自動套用粗體。
+
+**延遲注入 widget（先建立 adapter，之後再綁定 widget）：**
+
+```python
+adapter = DarkThemeTkinterAdapter("DEBUG")  # 先不傳 tk_window
+# ... 稍後 UI 建立完成後 ...
+adapter.set_tk_window(text)                 # 注入 widget 並套用 tag 設定
+```
+
+> **注意：** Tkinter 只允許從主執行緒操作 widget。
+> 若有跨執行緒 logging 需求，請在呼叫端使用 `widget.after()` 搭配 `queue.Queue`。
+
+---
+
+### 自訂 Adapter
+
+繼承 `LoggerAdapterBase` 並實作 `broadcast()` 即可接入 logger。
+
+```python
+from hyper_framework.message_logger import LoggerAdapterBase, SingletonSystemLogger
+
+class SlackAdapter(LoggerAdapterBase):
+    def __init__(self, level_filter, webhook_url):
+        super().__init__(level_filter)
+        self._url = webhook_url
+
+    def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
+        level = self.level_formator(level)
+        if not self._pass_filter(level):
+            return
+        # requests.post(self._url, json={"text": formatted})
+
+logger = SingletonSystemLogger()
+logger.register_adapter(SlackAdapter("ERROR", "https://hooks.slack.com/..."))
+```
+
+---
+
+### 環境變數控制
+
+| 變數 | 值 | 說明 |
+|---|---|---|
+| `RUN_MODE` | `DEBUG`（預設） | 全部等級通過全域過濾 |
+| `RUN_MODE` | `DISPLAY` | INFO 以上通過，DEBUG 被擋下 |
+| `RUN_MODE` | `RUN` | 僅 ERROR 通過（生產模式） |
 
 ---
 

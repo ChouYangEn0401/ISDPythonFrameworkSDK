@@ -1,66 +1,80 @@
-from abc import ABC, abstractmethod
 import os
 from datetime import datetime
-from typing import Optional, Literal, TYPE_CHECKING
+from typing import List
 
-from colorama import Fore, Style, init as colorama_init
-from personal_experiment.enum import LogLevelLiteral
+from colorama import init as colorama_init
+from personal_experiment.levels import LogLevelLiteral, LevelOrder
 
-# 初始化 colorama（讓 Windows 也能顯示 ANSI 色碼）
+colorama_init()
 _CURRENT_RUN_MODE = os.environ.get("RUN_MODE", "DEBUG")
-if TYPE_CHECKING:
-    from tkinter import Text
 
 
-class LoggerBase():
+class LoggerBase:
     """
-    專業的單例 SingletonSystemLogger，支援等級過濾、對齊、顏色與多種輸出模式。
+        Logger 核心基底類別。
 
-    Log Levels（由低到高）：
-        DEBUG:        用於詳細調試資訊，開發時用，平時一般不顯示。
-        INFO:         重要的正常運行訊息，例如系統啟動、完成某任務。
-        CHECKPOINT:   流程檢查點，介於 INFO 與 SUCCESS 之間，讓關鍵節點訊息更明顯。
-        SUCCESS:      特殊的成功訊息，表示某個操作成功完成，比 INFO 更突出成功狀態。
-        WARNING:      警告訊息，提示可能有問題但不影響運行。
-        ERROR:        錯誤訊息，表示操作失敗或重要錯誤，需要關注。
-        CRITICAL:     致命錯誤，系統崩潰或無法繼續執行，需要立即處理。
-        HIGHLIGHT:   超醒目提示。
+        負責：
+            - 格式化訊息（timestamp、level padding、HIGHLIGHT / shiny 裝飾）
+            - 全域啟用/停用開關
+            - 管理已註冊的 adapter 清單
+            - fan-out：廣播給所有 adapter（各 adapter 自行過濾）
+
+        全域 RUN_MODE 過濾（環境變數 RUN_MODE）：
+            DEBUG   — 全部等級通過（預設）
+            DISPLAY — INFO 以上通過
+            RUN     — 僅 ERROR 通過
+
+        等級過濾由各 adapter 透過 level_filter 個別控制。
     """
 
-    def _initialize_manager(self, adapters: Optional[list] = None):
+    def _initialize_manager(self):
         self._enabled = True
-        # self._min_level = "DEBUG"
-        self._max_level_len = max(len(lvl) for lvl in LogLevelLiteral)
-        self._adapters = adapters if adapters is not None else []
-        colorama_init()
+        self._adapters: List = []
+        # LevelOrder 是普通 dict，可安全迭代（Literal 型別在 runtime 無法迭代）
+        self._max_level_len = max(len(lvl) for lvl in LevelOrder)
 
-    # ------------------- 可設定交互與否的方法 --------------------
+    # --- Adapter 管理 ---------------------------------------------------------
+
+    def register_adapter(self, adapter) -> None:
+        """新增一個輸出 adapter。"""
+        self._adapters.append(adapter)
+
+    def unregister_adapter(self, adapter) -> None:
+        """移除指定 adapter。"""
+        self._adapters.remove(adapter)
+
+    def clear_adapters(self) -> None:
+        """移除所有已註冊的 adapters。"""
+        self._adapters.clear()
+
+    # --- 全域開關 -------------------------------------------------------------
 
     def enable_broadcast_msg(self): self._enabled = True
     def disable_broadcast_msg(self): self._enabled = False
 
-    # ------------------- 核心 log 方法 --------------------
+    # --- 核心 log 方法 --------------------------------------------------------
 
     def shiny_log(self, message: str, level: LogLevelLiteral = "INFO"):
-        """ ShinyMode=True, Log """
+        """以 ✨ 裝飾輸出（adapter 端會同時加亮顏色）。"""
         self.log(message, level, shine=True)
 
     def log(self, message: str, level: LogLevelLiteral = "INFO", shine: bool = False):
         """
-            Log Text
-            Log Levels（由低到高）：
-                DEBUG:        用於詳細調試資訊，開發時用，平時一般不顯示。
-                INFO:         重要的正常運行訊息，例如系統啟動、完成某任務。
-                CHECKPOINT:   流程檢查點，介於 INFO 與 SUCCESS 之間，讓關鍵節點訊息更明顯。
-                SUCCESS:      特殊的成功訊息，表示某個操作成功完成，比 INFO 更突出成功狀態。
-                WARNING:      警告訊息，提示可能有問題但不影響運行。
-                ERROR:        錯誤訊息，表示操作失敗或重要錯誤，需要關注。
-                CRITICAL:     致命錯誤，系統崩潰或無法繼續執行，需要立即處理。
-                HIGHLIGHT:   超醒目提示。
-            ShinyMode=False
+            主要 log 方法。格式化後 fan-out 至所有已註冊的 adapters。
+            各 adapter 依自身 level_filter 決定是否輸出。
         """
-        ## Check Runnable
         if not self._enabled:
+            return
+
+        ## Normalize & Validate Level
+        level = level.upper()
+        if level not in LevelOrder:
+            raise ValueError(f"未知的等級：{level}")
+
+        ## Global RUN_MODE Filter
+        if _CURRENT_RUN_MODE == "RUN" and level != "ERROR":
+            return
+        if level == "INFO" and _CURRENT_RUN_MODE not in ["DEBUG", "DISPLAY"]:
             return
 
         ## Message Preparation
@@ -73,12 +87,11 @@ class LoggerBase():
         else:
             formatted = f"[{timestamp}] [{padded_level}]: {message}"
 
-        ## Broadcast Message To Adapters
+        ## Broadcast Message To All Adapters
         for adapter in self._adapters:
             adapter.broadcast(level, formatted, shine)
-    
 
-    # ------------------- 快捷方法 --------------------
+    # --- 快捷方法 -------------------------------------------------------------
 
     def debug(self, msg: str): self.log(msg, "DEBUG")
     def info(self, msg: str): self.log(msg, "INFO")
@@ -88,4 +101,3 @@ class LoggerBase():
     def error(self, msg: str): self.log(msg, "ERROR")
     def critical(self, msg: str): self.log(msg, "CRITICAL")
     def highlight(self, msg: str): self.log(msg, "HIGHLIGHT")
-
