@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from tkinter import Text
 
 
-class LoggerBase(ABC):
+class LoggerBase():
     """
     專業的單例 SingletonSystemLogger，支援等級過濾、對齊、顏色與多種輸出模式。
 
@@ -35,14 +35,6 @@ class LoggerBase(ABC):
         colorama_init()
 
     # ------------------- 可設定交互與否的方法 --------------------
-
-    # def set_min_level(
-    #         self,
-    #         level: LogLevelLiteral
-    # ):
-    #     """ Set The Lowest Showcase Level """
-    #     if level in self._level_order:
-    #         self._min_level = level
 
     def enable_broadcast_msg(self): self._enabled = True
     def disable_broadcast_msg(self): self._enabled = False
@@ -70,17 +62,6 @@ class LoggerBase(ABC):
         ## Check Runnable
         if not self._enabled:
             return
-
-        # ## Check Filter
-        # level = level.upper()
-        # if level not in self._level_order:
-        #     raise ValueError(f"未知的等級：{level}")
-        # if self._level_order[level] < self._level_order[self._min_level]:
-        #     return
-        # if _CURRENT_RUN_MODE == "RUN" and level != "ERROR":
-        #     return
-        # if level == "INFO" and _CURRENT_RUN_MODE not in ["DEBUG", "DISPLAY"]:
-        #     return
 
         ## Message Preparation
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

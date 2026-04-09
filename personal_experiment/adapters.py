@@ -14,13 +14,11 @@ class LoggerAdapterBase(ABC):
     @abstractmethod
     def broadcast(self, level: str, formatted: str, shine: bool = False): pass
 
-    def set_filtered_level(
-            self,
-            level: LogLevelLiteral
-    ):
+    def set_filtered_level(self, level: LogLevelLiteral):
         """ Set The Lowest Showcase Level """
+        level = self.level_formator(level)
         if self._have_level(level, b_stop_when_error=True):
-            self._filtered_level = level
+            self.level_filter = level
     
     # ------------------- Status Checker --------------------
 
@@ -45,21 +43,20 @@ class LoggerAdapterBase(ABC):
         return True
     
     def _pass_filter(self, level: LogLevelLiteral) -> bool:
-        return LevelOrder[level] > LevelOrder[self._filtered_level]
+        return LevelOrder[level] > LevelOrder[self.level_filter]
 
 
 class TerminalAdapter(LoggerAdapterBase, ABC):
     # Console 輸出
     def broadcast(self, level: str, formatted: str, shine: bool = False):
         level = self.level_formator(level)
-        if self._pass_filter(level):
+        if not self._pass_filter(level):
             return
         
-        if self._output_mode in ("console", "both"):
-            color = self._level_colors.get(level, "")
-            if shine:
-                color = color + Style.BRIGHT
-            print(f"{color}{formatted}{Style.RESET_ALL}")
+        color = self._level_colors.get(level, "")
+        if shine:
+            color = color + Style.BRIGHT
+        print(f"{color}{formatted}{Style.RESET_ALL}")
 class DarkThemeTerminalAdapter(TerminalAdapter):
     _level_colors = {
         "DEBUG":      Fore.BLUE,                               # 藍色，適合詳細除錯
@@ -91,12 +88,11 @@ class FileAdapter(LoggerAdapterBase):
 
     def broadcast(self, level: str, formatted: str, shine: bool = False):
         level = self.level_formator(level)
-        if self._pass_filter(level):
+        if not self._pass_filter(level):
             return
         
-        if self._output_mode in ("file", "both"):
-            with open(self._log_file, "a", encoding="utf-8") as f:
-                f.write(formatted + "\n")
+        with open(self._log_file, "a", encoding="utf-8") as f:
+            f.write(formatted + "\n")
 
 class TkinterAdapter(LoggerAdapterBase):
     # Tkinter 輸出
@@ -106,7 +102,7 @@ class TkinterAdapter(LoggerAdapterBase):
 
     def broadcast(self, level: str, formatted: str, shine: bool = False):
         level = self.level_formator(level)
-        if self._pass_filter(level):
+        if not self._pass_filter(level):
             return
         
         if self._tk_window:
