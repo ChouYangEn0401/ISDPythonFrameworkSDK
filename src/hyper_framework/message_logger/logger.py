@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List
 
 from colorama import init as colorama_init
-from personal_experiment.levels import LogLevelLiteral, LevelOrder
+from hyper_framework.message_logger.levels import LogLevelLiteral, LevelOrder
 
 colorama_init()
 _CURRENT_RUN_MODE = os.environ.get("RUN_MODE", "DEBUG")

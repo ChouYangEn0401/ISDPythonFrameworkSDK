@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from colorama import Fore, Style
 
-from personal_experiment.levels import LevelOrder, LogLevelLiteral
+from hyper_framework.message_logger.levels import LevelOrder, LogLevelLiteral
 
 
 class LoggerAdapterBase(ABC):

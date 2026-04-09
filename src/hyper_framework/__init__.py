@@ -8,6 +8,13 @@ from .events.EventManager import SingletonEventManager
 from .events.DelayEventBusManager import DelayEventBusManager, IDelayEventBase, IDelayParsEventBase
 from .events.MulticastCallback import MulticastCallback
 from .message_logger.SingletonSystemLogger import SingletonSystemLogger
+from .message_logger.adapters import (
+    LoggerAdapterBase,
+    DarkThemeTerminalAdapter,
+    LightThemeTerminalAdapter,
+    FileAdapter,
+    TkinterAdapter,
+)
 from .decorators.decorators_pack import function_timer, timed_and_conditional_return, deprecated, battered
 from .exceptions.exceptions import (
     WrongOptionException,
@@ -30,6 +37,11 @@ __all__ = [
     "MulticastCallback",
     # logger
     "SingletonSystemLogger",
+    "LoggerAdapterBase",
+    "DarkThemeTerminalAdapter",
+    "LightThemeTerminalAdapter",
+    "FileAdapter",
+    "TkinterAdapter",
     # decorators
     "function_timer",
     "timed_and_conditional_return",
