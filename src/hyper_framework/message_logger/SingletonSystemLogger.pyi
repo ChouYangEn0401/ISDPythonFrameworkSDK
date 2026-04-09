@@ -1,8 +1,10 @@
 from hyper_framework.base.Singleton import SingletonMetaclass as SingletonMetaclass
-from typing import TYPE_CHECKING, Literal
+from hyper_framework.message_logger._sinks import LogSink as LogSink
+from hyper_framework.message_logger._sinks import TerminalSink as TerminalSink
+from hyper_framework.message_logger._sinks import FileSink as FileSink
+from hyper_framework.message_logger._sinks import TkinterSink as TkinterSink
+from typing import List, Literal
 
-if TYPE_CHECKING:
-    from tkinter import Text
 
 class SingletonSystemLogger(metaclass=SingletonMetaclass):
     LogLevelLiteral = Literal[
@@ -13,67 +15,55 @@ class SingletonSystemLogger(metaclass=SingletonMetaclass):
     ]
 
     """
-        專業的單例 SingletonSystemLogger，支援等級過濾、對齊、顏色與多種輸出模式。
+    單例 Logger，負責格式化與等級過濾，再將訊息 fan-out 至所有已註冊的 sink。
 
-        Log Levels（由低到高）：
-            DEBUG:        用於詳細調試資訊，開發時用，平時一般不顯示。
-            INFO:         重要的正常運行訊息，例如系統啟動、完成某任務。
-            CHECKPOINT:   流程檢查點，介於 INFO 與 SUCCESS 之間，讓關鍵節點訊息更明顯。
-            SUCCESS:      特殊的成功訊息，表示某個操作成功完成，比 INFO 更突出成功狀態。
-            WARNING:      警告訊息，提示可能有問題但不影響運行。
-            ERROR:        錯誤訊息，表示操作失敗或重要錯誤，需要關注。
-            CRITICAL:     致命錯誤，系統崩潰或無法繼續執行，需要立即處理。
-            HIGHLIGHT:   超醒目提示。
+    Log Levels（由低到高）：
+        DEBUG / INFO / CHECKPOINT / SUCCESS / WARNING / ERROR / CRITICAL / HIGHLIGHT
+
+    環境變數：
+        RUN_MODE=DEBUG|DISPLAY|RUN
+        CONSOLE_BG=dark|light
     """
-    @staticmethod
-    def help() -> None:
-        """ Show The Level For Each Usable Mode """
+
+    _sinks: List[LogSink]
+
+    # ── Sink 管理 ─────────────────────────────────────
+    def register_sink(self, sink: LogSink) -> None:
+        """新增一個輸出 sink。"""
         ...
-    def set_min_level(self, level: LogLevelLiteral):
-        """ Set The Lowest Showcase Level """
+    def unregister_sink(self, sink: LogSink) -> None:
+        """移除指定 sink。"""
         ...
-    def set_output_mode(self, mode: Literal['console', 'file', 'both']):
-        """ Set Message OutPut Mode """
-        ...
-    def set_log_file(self, filepath: str):
-        """ Set Output Place To Local File """
-        ...
-    def enable(self) -> None:
-        """ Allow Logger To Take Action """
-        ...
-    def disable(self) -> None:
-        """ Disallow Logger To Take Action """
-        ...
-    def set_window(self, text_widget: Text):
-        """ Set Output Place To Existed Text Widget In Tkinter Window """
-        ...
-    def shiny_log(self, message: str, level: LogLevelLiteral = 'INFO'):
-        """ ShinyMode=True, Log """
+    def clear_sinks(self) -> None:
+        """移除所有 sinks。"""
         ...
 
-    def log(self, message: str, level: LogLevelLiteral = "INFO", shine: bool = False):
-        """
-            Log Text
-            Log Levels（由低到高）：
-                DEBUG:        用於詳細調試資訊，開發時用，平時一般不顯示。
-                INFO:         重要的正常運行訊息，例如系統啟動、完成某任務。
-                CHECKPOINT:   流程檢查點，介於 INFO 與 SUCCESS 之間，讓關鍵節點訊息更明顯。
-                SUCCESS:      特殊的成功訊息，表示某個操作成功完成，比 INFO 更突出成功狀態。
-                WARNING:      警告訊息，提示可能有問題但不影響運行。
-                ERROR:        錯誤訊息，表示操作失敗或重要錯誤，需要關注。
-                CRITICAL:     致命錯誤，系統崩潰或無法繼續執行，需要立即處理。
-                HIGHLIGHT:   超醒目提示。
-            ShinyMode=False
-        """
+    # ── 全域開關 ──────────────────────────────────────
+    def enable(self) -> None: ...
+    def disable(self) -> None: ...
+
+    # ── 工具 ──────────────────────────────────────────
+    @staticmethod
+    def help() -> None: ...
+
+    # ── 核心 log 方法 ─────────────────────────────────
+    def shiny_log(self, message: str, level: LogLevelLiteral = "INFO") -> None:
+        """以 ✨ 裝飾輸出。"""
         ...
-    def debug(self, msg: str): ...
-    def info(self, msg: str): ...
-    def checkpoint(self, msg: str): ...
-    def success(self, msg: str): ...
-    def warning(self, msg: str): ...
-    def error(self, msg: str): ...
-    def critical(self, msg: str): ...
-    def highlight(self, msg: str): ...
+    def log(self, message: str, level: LogLevelLiteral = "INFO", shine: bool = False) -> None:
+        """主要 log 方法，格式化後 fan-out 至所有允許此等級的 sinks。"""
+        ...
+
+    # ── 快捷方法 ──────────────────────────────────────
+    def debug(self, msg: str) -> None: ...
+    def info(self, msg: str) -> None: ...
+    def checkpoint(self, msg: str) -> None: ...
+    def success(self, msg: str) -> None: ...
+    def warning(self, msg: str) -> None: ...
+    def error(self, msg: str) -> None: ...
+    def critical(self, msg: str) -> None: ...
+    def highlight(self, msg: str) -> None: ...
+
 
 def test_logger_basic_flow() -> None: ...
 def test_logger_level_order_and_aliases() -> None: ...
