@@ -2,13 +2,6 @@
 hyper_framework.helpers.exceptions — All custom exception classes.
 """
 
-# ── Legacy shim (backward compat — do NOT modify signatures) ──────────────
-from .exceptions import (
-    WrongOptionException,
-    WrongImplementationException,
-    UnhandledConditionError,
-    RepeatedInitializationError,
-)
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────
 from .lifecycle import (

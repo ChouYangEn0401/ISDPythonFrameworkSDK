@@ -15,23 +15,19 @@ Modules:
   architecture     — SRP enforcement, layer guards, interface contracts
 """
 
-# ── Legacy (original API — do NOT modify signatures) ──────────────────────
-from .decorators_pack import (
-    function_timer,
-    timed_and_conditional_return,
-    deprecated,
-    battered,
-)
-
 # ── Profiling (timing, call counting, memory) ─────────────────────────────
 from .profiling import (
     log_call,
     count_calls,
     profile_memory,
+    function_timer,
+    timed_and_conditional_return,
 )
 
 # ── Lifecycle (API versioning signals) ───────────────────────────────────
 from .lifecycle import (
+    deprecated,
+    battered,
     experimental,
     removed_in,
     since,

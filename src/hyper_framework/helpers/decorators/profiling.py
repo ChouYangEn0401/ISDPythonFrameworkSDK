@@ -52,7 +52,7 @@ def timed_and_conditional_return(func):
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        with_time_return = kwargs.get("with_time_return", False)
+        with_time_return = kwargs.pop("with_time_return", False)
 
         print(f"--- 開始執行：{func.__name__} ---")
         start_time = time.time()
