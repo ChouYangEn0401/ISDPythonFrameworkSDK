@@ -296,104 +296,149 @@ SingletonSystemLogger（單例 orchestrator）
 
 ---
 
-### 基本使用
+### 快速試用（可直接貼到 terminal 執行）
 
 ```python
-from hyper_framework.message_logger import (
+from hyper_framework import SingletonSystemLogger, DarkThemeTerminalAdapter
+
+logger = SingletonSystemLogger()
+logger.register_adapter(DarkThemeTerminalAdapter("DEBUG"))
+
+logger.debug("除錯訊息")
+logger.info("正常流程")
+logger.checkpoint("關鍵節點")
+logger.success("操作成功")
+logger.warning("注意事項")
+logger.error("發生錯誤")
+logger.critical("致命錯誤")
+logger.highlight("超醒目")
+logger.shiny_log("閃亮登場", "SUCCESS")
+```
+
+---
+
+### Adapter：`TerminalAdapter`（彩色 console）
+
+```python
+from hyper_framework import (
     SingletonSystemLogger,
     DarkThemeTerminalAdapter,
-    FileAdapter,
-    TkinterAdapter,
+    LightThemeTerminalAdapter,
 )
-from pathlib import Path
 
 logger = SingletonSystemLogger()
-
-# 1. 組合輸出 adapter
-logger.register_adapter(DarkThemeTerminalAdapter("DEBUG"))          # terminal 顯示 DEBUG 以上
-logger.register_adapter(FileAdapter("WARNING", Path("app.log")))    # 檔案只寫 WARNING 以上
-
-# 2. 輸出訊息
-logger.log("系統啟動完成", level="INFO")
-logger.log("資料載入成功", level="SUCCESS")
-logger.shiny_log("關鍵里程碑", level="CHECKPOINT")  # ✨ 裝飾 + 亮色
-
-# 快捷方法
-logger.debug("詳細追蹤")
-logger.info("正常流程")
-logger.checkpoint("檢查點")
-logger.success("成功")
-logger.warning("警告")
-logger.error("錯誤")
-logger.critical("致命")
-logger.highlight("超醒目")
-
-# 全域開關（不影響 adapter 設定）
-logger.disable_broadcast_msg()
-logger.enable_broadcast_msg()
-
-# 管理 adapter
-logger.unregister_adapter(some_adapter)
 logger.clear_adapters()
-```
 
----
+# 深色主題（適合黑色 / 深色終端）
+logger.register_adapter(DarkThemeTerminalAdapter("DEBUG"))
 
-### Adapter：`TerminalAdapter`
+# 或淺色主題（適合白色 / 淺色終端）
+# logger.register_adapter(LightThemeTerminalAdapter("DEBUG"))
 
-```python
-from hyper_framework.message_logger import DarkThemeTerminalAdapter, LightThemeTerminalAdapter
+logger.info("INFO 訊息")
+logger.warning("WARNING 訊息")
 
-# 深色主題，顯示 DEBUG 以上
+# 隨時調整單一 adapter 的過濾等級
 adapter = DarkThemeTerminalAdapter("DEBUG")
-
-# 淺色主題，只顯示 WARNING 以上
-adapter = LightThemeTerminalAdapter("WARNING")
-
-# 隨時調整過濾等級
-adapter.set_filtered_level("INFO")
+adapter.set_filtered_level("WARNING")     # 現在只顯示 WARNING 以上
+logger.register_adapter(adapter)
 ```
 
 ---
 
-### Adapter：`FileAdapter`
+### Adapter：`FileAdapter`（寫入本機檔案）
 
 ```python
-from hyper_framework.message_logger import FileAdapter
 from pathlib import Path
+from hyper_framework import SingletonSystemLogger, FileAdapter, DarkThemeTerminalAdapter
 
-# 只寫 WARNING 以上
-adapter = FileAdapter("WARNING", Path("logs/app.log"))
+logger = SingletonSystemLogger()
+logger.clear_adapters()
+logger.register_adapter(FileAdapter("WARNING", Path("app.log")))
+
+logger.info("這行不會進檔案")          # 被 WARNING 過濾掉
+logger.warning("這行會進檔案")
+logger.error("這行也會進檔案")
+
+# 驗證寫入內容
+print(Path("app.log").read_text(encoding="utf-8"))
 ```
 
 ---
 
-### Adapter：`TkinterAdapter`
+### Adapter：`TkinterAdapter`（Text widget 彩色輸出）
 
-提供深色與淺色兩種主題，自動替每個 log 等級設定 Tkinter Text **tag** 顏色（含 `_SHINE` 粗體變體）。
+每個等級自動設定對應的 Tkinter Text **tag** 顏色；`shiny_log()` 額外套用粗體（`_SHINE` tag）。
 
 ```python
+import argparse
 import tkinter as tk
 from hyper_framework.message_logger import (
+    SingletonSystemLogger,
     DarkThemeTkinterAdapter,
     LightThemeTkinterAdapter,
-    SingletonSystemLogger,
 )
 
-root = tk.Tk()
-text = tk.Text(root)
-text.pack()
 
-logger = SingletonSystemLogger()
+def create_app(initial_theme: str = "dark"):
+    root = tk.Tk()
+    root.title("Logger Theme Switch")
 
-# 深色主題：顯示 INFO 以上
-logger.register_adapter(DarkThemeTkinterAdapter("INFO", tk_window=text))
+    text = tk.Text(root)
+    text.pack(fill="both", expand=True)
 
-# 或淺色主題
-# logger.register_adapter(LightThemeTkinterAdapter("INFO", tk_window=text))
+    logger = SingletonSystemLogger()
+
+    def set_theme(theme: str):
+        logger.clear_adapters()
+        if theme == "dark":
+            text.configure(bg="#1e1e1e", fg="#ffffff")
+            logger.register_adapter(DarkThemeTkinterAdapter("INFO", tk_window=text))
+        else:
+            text.configure(bg="#ffffff", fg="#000000")
+            logger.register_adapter(LightThemeTkinterAdapter("INFO", tk_window=text))
+
+    def toggle_theme():
+        root.current_theme = "light" if root.current_theme == "dark" else "dark"
+        set_theme(root.current_theme)
+
+    btn = tk.Button(root, text="Toggle Theme", command=toggle_theme)
+    btn.pack(anchor="ne", padx=8, pady=8)
+
+    root.current_theme = initial_theme
+    set_theme(root.current_theme)
+
+    # Example logs to show in the text widget
+    logger.info("INFO 訊息")
+    logger.warning("WARNING 訊息")
+    logger.shiny_log("閃亮節點", "CHECKPOINT")
+
+    return root
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Tkinter logger theme switcher")
+    parser.add_argument("--theme", choices=["dark", "light"], default="dark", help="initial theme")
+    args = parser.parse_args()
+
+    app = create_app(initial_theme=args.theme)
+    app.mainloop()
 ```
 
-**Tag 顏色對應（深色 / 淺色）：**
+**延遲注入 widget（先建 adapter，UI 初始化後再綁定）：**
+
+```python
+from hyper_framework.message_logger import SingletonSystemLogger, DarkThemeTkinterAdapter
+
+logger = SingletonSystemLogger()
+adapter = DarkThemeTkinterAdapter("DEBUG")   # 先不傳 tk_window
+logger.register_adapter(adapter)
+
+# ... UI 建立完成後 ...
+# adapter.set_tk_window(text)               # 注入 widget，同時套用所有 tag
+```
+
+**Tag 顏色對應：**
 
 | Level | Dark theme | Light theme |
 |---|---|---|
@@ -406,18 +451,32 @@ logger.register_adapter(DarkThemeTkinterAdapter("INFO", tk_window=text))
 | `CRITICAL` | `#ff44ff` | `#880088` |
 | `HIGHLIGHT` | `#ffff33` | `#0055ff` |
 
-`shiny_log()` 使用 `<LEVEL>_SHINE` tag，自動套用粗體。
-
-**延遲注入 widget（先建立 adapter，之後再綁定 widget）：**
-
-```python
-adapter = DarkThemeTkinterAdapter("DEBUG")  # 先不傳 tk_window
-# ... 稍後 UI 建立完成後 ...
-adapter.set_tk_window(text)                 # 注入 widget 並套用 tag 設定
-```
-
 > **注意：** Tkinter 只允許從主執行緒操作 widget。
 > 若有跨執行緒 logging 需求，請在呼叫端使用 `widget.after()` 搭配 `queue.Queue`。
+
+---
+
+### 組合多個 Adapter
+
+```python
+from pathlib import Path
+from hyper_framework.message_logger import (
+    SingletonSystemLogger,
+    DarkThemeTerminalAdapter,
+    FileAdapter,
+    DarkThemeTkinterAdapter,
+)
+
+logger = SingletonSystemLogger()
+logger.clear_adapters()
+
+logger.register_adapter(DarkThemeTerminalAdapter("DEBUG"))         # console 顯示全部
+logger.register_adapter(FileAdapter("WARNING", Path("app.log")))   # 檔案只寫 WARNING+
+# logger.register_adapter(DarkThemeTkinterAdapter("INFO", tk_window=text))  # UI 顯示 INFO+
+
+logger.debug("只有 console 看得到")
+logger.warning("console + 檔案都看得到")
+```
 
 ---
 
@@ -429,7 +488,7 @@ adapter.set_tk_window(text)                 # 注入 widget 並套用 tag 設定
 from hyper_framework.message_logger import LoggerAdapterBase, SingletonSystemLogger
 
 class SlackAdapter(LoggerAdapterBase):
-    def __init__(self, level_filter, webhook_url):
+    def __init__(self, level_filter: str, webhook_url: str):
         super().__init__(level_filter)
         self._url = webhook_url
 
@@ -437,15 +496,39 @@ class SlackAdapter(LoggerAdapterBase):
         level = self.level_formator(level)
         if not self._pass_filter(level):
             return
+        # import requests
         # requests.post(self._url, json={"text": formatted})
+        print(f"[Slack → {self._url}] {formatted}")
 
 logger = SingletonSystemLogger()
 logger.register_adapter(SlackAdapter("ERROR", "https://hooks.slack.com/..."))
+logger.error("這則訊息會送到 Slack")
 ```
 
 ---
 
-### 環境變數控制
+### 全域開關與 Adapter 管理
+
+```python
+logger = SingletonSystemLogger()
+
+# 暫時靜音（不影響 adapter 設定）
+logger.disable_broadcast_msg()
+logger.info("這行不會輸出")
+
+logger.enable_broadcast_msg()
+logger.info("重新輸出")
+
+# 移除特定 adapter
+logger.unregister_adapter(some_adapter)
+
+# 清空全部
+logger.clear_adapters()
+```
+
+---
+
+### 環境變數控制（全域過濾）
 
 | 變數 | 值 | 說明 |
 |---|---|---|
@@ -453,7 +536,15 @@ logger.register_adapter(SlackAdapter("ERROR", "https://hooks.slack.com/..."))
 | `RUN_MODE` | `DISPLAY` | INFO 以上通過，DEBUG 被擋下 |
 | `RUN_MODE` | `RUN` | 僅 ERROR 通過（生產模式） |
 
----
+```bash
+# Linux / macOS
+RUN_MODE=DISPLAY python your_script.py
+
+# Windows PowerShell
+$env:RUN_MODE="DISPLAY"; python your_script.py
+```
+
+
 
 ## `decorators` — 裝飾器工具
 

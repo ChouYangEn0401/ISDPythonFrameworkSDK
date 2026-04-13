@@ -14,6 +14,8 @@ from .message_logger.adapters import (
     LightThemeTerminalAdapter,
     FileAdapter,
     TkinterAdapter,
+    DarkThemeTkinterAdapter,
+    LightThemeTkinterAdapter,
 )
 from .decorators.decorators_pack import function_timer, timed_and_conditional_return, deprecated, battered
 from .exceptions.exceptions import (
@@ -42,6 +44,8 @@ __all__ = [
     "LightThemeTerminalAdapter",
     "FileAdapter",
     "TkinterAdapter",
+    "DarkThemeTkinterAdapter",
+    "LightThemeTkinterAdapter",
     # decorators
     "function_timer",
     "timed_and_conditional_return",
