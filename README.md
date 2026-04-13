@@ -1212,21 +1212,6 @@ from hyper_framework import (
 
 ## `unitest_structure` — 測試工具（需 `[excel]` extras）
 
-### 型別斷言
-
-```python
-from hyper_framework.unitest_structure import (
-    assert__is_str,
-    assert__is_list_of_str,
-    assert__is_list_of_list_of_str,
-    assert__is_list_of_tuple_of_str,
-)
-
-assert__is_str("hello")                        # OK
-assert__is_list_of_str(["a", "b"])             # OK
-assert__is_list_of_list_of_str([["a"], ["b"]]) # OK
-```
-
 ### Excel 結構核對
 
 ```python
@@ -1270,8 +1255,5 @@ builder__whl.bat
 
 ## Acknowledgements / 銘謝
 
-本專案的底層架構原先在國立台灣大學（NTU）實驗室擔任工程師期間開發，
-從個人專案 `ACA`（完全由本人開發，約 60k+ 行）中抽取整理而來。
-詳見 `AUTHORS.md`。
-
+本專案的底層架構，原先是在國立台灣大學（NTU）實驗室中擔任實驗助理期間開發，而後本人重新進行維護，詳見 `AUTHORS.md`。
 
