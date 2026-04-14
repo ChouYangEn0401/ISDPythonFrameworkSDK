@@ -166,9 +166,9 @@ class _FallbackResult:
     """Minimal stand-in when compare functions return bool/None (old API)."""
     __slots__ = ("passed", "errors")
 
-    def __init__(self, passed: bool):
+    def __init__(self, passed: bool, msg: str | None = None):
         self.passed = passed
-        self.errors = [] if passed else ["(detail not available from old API)"]
+        self.errors = [] if passed else [msg or "(detail not available from old API)"]
 
     def __bool__(self):
         return self.passed
@@ -178,14 +178,31 @@ class _FallbackResult:
 def run():
     """Wrap a compare function call, normalising its return to ``.passed`` / ``.errors``.
 
-    Works with both the old API (returns ``bool`` / ``None``) and the new
-    ``CompareResult`` API.
+    Works with:
+      - new API : returns ``CompareResult``   → used directly
+      - semi-old: returns ``bool``            → wrapped in _FallbackResult
+      - legacy  : returns ``None``            → stdout is captured and
+                  pass/fail is inferred from ``✗`` / ``FAILED`` markers
+                  printed by the function itself, then the output is
+                  re-emitted so pytest still shows it on failure.
     """
+    import io
+    import contextlib
+
     def _invoke(compare_fn, config):
-        raw = compare_fn(config)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            raw = compare_fn(config)
+        captured = buf.getvalue()
+        # Always re-emit so pytest captures / shows the compare output.
+        print(captured, end="")
+
         if raw is None:
-            pytest.skip("compare function returned None — requires CompareResult API")
+            # Legacy API: infer from printed markers (✗ / FAILED = fail).
+            passed = "✗" not in captured and "FAILED" not in captured
+            return _FallbackResult(passed, None if passed else "(see output above)")
         if hasattr(raw, "passed"):
             return raw
         return _FallbackResult(bool(raw))
+
     return _invoke
