@@ -34,9 +34,19 @@ excel = [
     "openpyxl>=3.1",
     "pandas>=2.0",
 ]
+# pip install isd-python-framework[yaml]
+yaml = [
+    "pyyaml>=6.0",
+]
+# pip install isd-python-framework[filetest]  (excel + yaml — CSV/JSON/TXT/XML/INI/TOML 內建不需額外套件)
+filetest = [
+    "openpyxl>=3.1",
+    "pandas>=2.0",
+    "pyyaml>=6.0",
+]
 # pip install isd-python-framework[all]
 all = [
-    "isd-python-framework[dev,excel]",
+    "isd-python-framework[dev,filetest]",
 ]
 
 [project.scripts]

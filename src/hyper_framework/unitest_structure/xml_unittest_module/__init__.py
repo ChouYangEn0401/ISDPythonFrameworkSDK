@@ -1,0 +1,1 @@
+from .run_xml_structure_test import compare_xml_files

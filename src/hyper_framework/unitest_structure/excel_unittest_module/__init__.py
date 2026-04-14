@@ -1,0 +1,2 @@
+from .run_excel_structure_test import compare_excel_sheets
+from .depreacted import run_excel_structure_test

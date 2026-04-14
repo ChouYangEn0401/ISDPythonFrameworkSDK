@@ -1,0 +1,1 @@
+from .run_yaml_structure_test import compare_yaml_files

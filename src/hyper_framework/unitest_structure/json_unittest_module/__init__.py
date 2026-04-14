@@ -1,0 +1,1 @@
+from .run_json_structure_test import compare_json_files
