@@ -45,5 +45,4 @@ def compare_yaml_files(config: Dict[str, Any]) -> bool:
 
     errors = deep_compare(target, bench, "$", None, exclude_paths, include_paths)
 
-    print_test_result("YAML 比對", errors)
-    return not errors
+    return print_test_result("YAML 比對", errors)

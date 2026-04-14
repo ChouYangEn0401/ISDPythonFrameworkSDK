@@ -85,5 +85,4 @@ def compare_xml_files(config: Dict[str, Any]) -> bool:
     errors: list = []
     _compare_elements(t_tree.getroot(), b_tree.getroot(), "/", checks, errors, exclude_tags)
 
-    print_test_result("XML 比對", errors)
-    return not errors
+    return print_test_result("XML 比對", errors)

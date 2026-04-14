@@ -95,5 +95,4 @@ def compare_csv_files(config: Dict[str, Any]) -> bool:
                         + colorize_diff(repr(tv), repr(bv))
                     )
 
-    print_test_result("CSV 比對", errors)
-    return not errors
+    return print_test_result("CSV 比對", errors)

@@ -3,7 +3,29 @@ unitest_structure._shared
 ─────────────────────────
 Shared colour constants and helpers for all file-comparison modules.
 """
+from dataclasses import dataclass, field as _dataclass_field
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+
+@dataclass
+class CompareResult:
+    """Result of a single file-comparison call.
+
+    Behaves as ``bool`` for backward-compatibility::
+
+        if compare_csv_files(cfg):   # still works
+            ...
+    """
+    label: str
+    passed: bool
+    errors: list = _dataclass_field(default_factory=list)
+
+    def __bool__(self) -> bool:
+        return self.passed
+
+    def __repr__(self) -> str:
+        status = "PASS" if self.passed else f"FAIL({len(self.errors)} errors)"
+        return f"CompareResult({self.label!r}, {status})"
 
 
 # ── ANSI colour codes ────────────────────────────────────────────────────
@@ -112,16 +134,16 @@ def deep_compare(
 
 # ── output helpers ───────────────────────────────────────────────────────
 def print_compare_header(fmt: str, target: str, bench: str):
-    print(f"\n🚀 {CYAN}開始 {fmt} 對照測試...{RESET}")
+    print(f"\n{CYAN}[{fmt}] 開始對照測試...{RESET}")
     print(f"   待測檔: {target}")
     print(f"   標準檔: {bench}\n")
 
 
-def print_test_result(label: str, errors: list, *, max_display: int = 10) -> bool:
-    """Print coloured pass / fail summary.  Returns ``True`` on pass."""
+def print_test_result(label: str, errors: list, *, max_display: int = 10) -> "CompareResult":
+    """Print coloured pass / fail summary and return a :class:`CompareResult`."""
     if not errors:
         print(f"  {GREEN}✓ PASS{RESET} {label}")
-        return True
+        return CompareResult(label=label, passed=True, errors=[])
 
     print(f"  {RED}✗ FAILED ({len(errors)} 個錯誤){RESET} {label}")
     for err in errors[:max_display]:
@@ -132,4 +154,4 @@ def print_test_result(label: str, errors: list, *, max_display: int = 10) -> boo
             print(f"    - {err}")
     if len(errors) > max_display:
         print(f"    ... 以及其餘 {len(errors) - max_display} 個錯誤")
-    return False
+    return CompareResult(label=label, passed=False, errors=errors)

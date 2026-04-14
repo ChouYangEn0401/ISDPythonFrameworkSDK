@@ -74,5 +74,4 @@ def compare_ini_files(config: Dict[str, Any]) -> bool:
             elif tv != bv:
                 errors.append(f"[{sec}].{key}: {colorize_diff(repr(tv), repr(bv))}")
 
-    print_test_result("INI 比對", errors)
-    return not errors
+    return print_test_result("INI 比對", errors)

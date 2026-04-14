@@ -67,5 +67,4 @@ def compare_txt_files(config: Dict[str, Any]) -> bool:
             if tl != bl:
                 errors.append(f"第 {r} 行: {colorize_diff(repr(tl), repr(bl))}")
 
-    print_test_result("TXT 比對", errors)
-    return not errors
+    return print_test_result("TXT 比對", errors)

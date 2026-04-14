@@ -68,5 +68,4 @@ def compare_jsonl_files(config: Dict[str, Any]) -> bool:
         line_errors = deep_compare(t_obj, b_obj, f"L{r}")
         errors.extend(line_errors)
 
-    print_test_result("JSONL 比對", errors)
-    return not errors
+    return print_test_result("JSONL 比對", errors)
