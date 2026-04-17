@@ -94,3 +94,8 @@ python tests/test_file/run_all.py
 ## 四、自訂測試（以 excel 為例）
 
 複製 `test_excel.py`，修改 `target_path`、`bench_path` 與 `sheets` 設定即可套用到你自己的專案檔案。
+ 
+## 顯示錯誤行數控制
+
+- 全域設定：在各 compare 的 `config` 裡可使用 `"max_display_errors"` 指定要顯示的錯誤行數（預設 15 行）。
+- 每個工作表/比較項可用相同 key 覆寫（Excel 範例中於 `sheets[...]` 的每一個 entry 裡使用 `"max_display_errors"`）。

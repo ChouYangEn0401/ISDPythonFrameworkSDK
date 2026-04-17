@@ -67,4 +67,5 @@ def compare_txt_files(config: Dict[str, Any]) -> bool:
             if tl != bl:
                 errors.append(f"第 {r} 行: {colorize_diff(repr(tl), repr(bl))}")
 
-    return print_test_result("TXT 比對", errors)
+    max_display = config.get("max_display_errors", 15)
+    return print_test_result("TXT 比對", errors, max_display=max_display)

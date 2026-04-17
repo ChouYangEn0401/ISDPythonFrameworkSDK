@@ -85,4 +85,5 @@ def compare_xml_files(config: Dict[str, Any]) -> bool:
     errors: list = []
     _compare_elements(t_tree.getroot(), b_tree.getroot(), "/", checks, errors, exclude_tags)
 
-    return print_test_result("XML 比對", errors)
+    max_display = config.get("max_display_errors", 15)
+    return print_test_result("XML 比對", errors, max_display=max_display)

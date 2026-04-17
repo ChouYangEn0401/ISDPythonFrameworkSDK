@@ -95,5 +95,6 @@ def compare_csv_files(config: Dict[str, Any]) -> bool:
                         + colorize_diff(repr(tv), repr(bv))
                     )
 
-    print_test_result("CSV 比對", errors)
+    max_display = config.get("max_display_errors", 15)
+    print_test_result("CSV 比對", errors, max_display=max_display)
     return not errors

@@ -43,4 +43,5 @@ def compare_toml_files(config: Dict[str, Any]) -> bool:
 
     errors = deep_compare(target, bench, "$", None, exclude_paths, include_paths)
 
-    return print_test_result("TOML 比對", errors)
+    max_display = config.get("max_display_errors", 15)
+    return print_test_result("TOML 比對", errors, max_display=max_display)

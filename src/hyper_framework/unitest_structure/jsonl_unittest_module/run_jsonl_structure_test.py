@@ -68,5 +68,6 @@ def compare_jsonl_files(config: Dict[str, Any]) -> bool:
         line_errors = deep_compare(t_obj, b_obj, f"L{r}")
         errors.extend(line_errors)
 
-    print_test_result("JSONL 比對", errors)
+    max_display = config.get("max_display_errors", 15)
+    print_test_result("JSONL 比對", errors, max_display=max_display)
     return not errors

@@ -74,4 +74,5 @@ def compare_ini_files(config: Dict[str, Any]) -> bool:
             elif tv != bv:
                 errors.append(f"[{sec}].{key}: {colorize_diff(repr(tv), repr(bv))}")
 
-    return print_test_result("INI 比對", errors)
+    max_display = config.get("max_display_errors", 15)
+    return print_test_result("INI 比對", errors, max_display=max_display)

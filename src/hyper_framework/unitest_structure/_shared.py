@@ -139,7 +139,7 @@ def print_compare_header(fmt: str, target: str, bench: str):
     print(f"   標準檔: {bench}\n")
 
 
-def print_test_result(label: str, errors: list, *, max_display: int = 10) -> "CompareResult":
+def print_test_result(label: str, errors: list, *, max_display: int = 15) -> "CompareResult":
     """Print coloured pass / fail summary and return a :class:`CompareResult`."""
     if not errors:
         print(f"  {GREEN}✓ PASS{RESET} {label}")

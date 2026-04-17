@@ -64,6 +64,9 @@ def compare_excel_sheets(config: Dict[str, Any]):
     wb_t = load_workbook(target_path, data_only=True)
     wb_b = load_workbook(bench_path, data_only=True)
 
+    # 全域預設要顯示的錯誤行數（可由 config 調整）
+    global_max_display = config.get("max_display_errors", 15)
+
     for sheet_conf in config['sheets']:
         t_name = sheet_conf['target_sheet']
         b_name = sheet_conf['bench_sheet']
@@ -115,6 +118,9 @@ def compare_excel_sheets(config: Dict[str, Any]):
         real_errors = 0
         expected_changes = 0
         false_skips = 0
+
+        # 每個工作表可以覆寫顯示數量
+        max_display = sheet_conf.get("max_display_errors", global_max_display)
 
         # 獲取最大檢查範圍 (以標準檔為準)
         max_row = ws_b.max_row
@@ -249,9 +255,9 @@ def compare_excel_sheets(config: Dict[str, Any]):
             else:
                 print(f"  {RED}✗ FAILED ({real_errors} 個錯誤){RESET}")
 
-            for err in errors[:5]:
+            for err in errors[:max_display]:
                 print(f"    - {err}")
 
-            if len(errors) > 5:
-                print(f"    ... 以及其餘 {len(errors) - 5} 個錯誤")
+            if len(errors) > max_display:
+                print(f"    ... 以及其餘 {len(errors) - max_display} 個錯誤")
 

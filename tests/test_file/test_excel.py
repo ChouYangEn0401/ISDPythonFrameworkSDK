@@ -16,6 +16,8 @@ BASE = Path(__file__).parent / "base"
 TEST_CONFIG = {
     "target_path": str(BASE / "sample.xlsx"),
     "bench_path":  str(BASE / "[BU] sample.xlsx"),
+    # 全域錯誤顯示數量（預設 15）。可在每個 sheet 中覆寫：sheet_conf['max_display']
+    "max_display": 15,
     "sheets": [
         {
             "target_sheet": "Sheet",
