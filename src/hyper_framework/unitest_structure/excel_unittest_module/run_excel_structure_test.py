@@ -1,8 +1,34 @@
+"""Excel sheet comparison tool.
+
+Config example::
+
+    {
+        "target_path": "target.xlsx",
+        "bench_path":  "expected.xlsx",
+        "sheets": [
+            {
+                "target_sheet": "Sheet1",
+                "bench_sheet": "Sheet1",
+                "checks": ["content", "color", "freeze", "hidden"],
+                "mask": {
+                    "include_rows": [1,2], 
+                    "exclude_cells": ["A1"]
+                },
+                "marker":
+                {
+                    "known_correct": ["E5"],
+                    "known_incorrect": ["N35"]
+                }
+            }
+        ]
+    }
+"""
+
 from openpyxl import load_workbook
 from typing import Dict, Any
 from openpyxl.utils import get_column_letter
 
-# --- 顏色與格式化輸出 ---
+# color / formatting
 GREEN = "\033[92m"
 RED = "\033[91m"
 YELLOW = "\033[93m"
@@ -48,11 +74,20 @@ def compare_excel_sheets(config: Dict[str, Any]):
         ws_t = wb_t[t_name]
         ws_b = wb_b[b_name]
 
-        # ---------- skip 設定（可選） ----------
-        skip_conf = sheet_conf.get("skip")
-        if skip_conf:
-            correct_skip = set(skip_conf.get("correct", []))
-            false_skip = set(skip_conf.get("false", []))
+        # ---------- marker 設定（可選；舊版 skip 向下相容） ----------
+        # marker.known_correct  : 差異是正確的版本更新 → 不列出，計入「已確認正確改動」
+        # marker.known_incorrect: 差異已確認為問題   → 不列出，計入「已確認問題」
+        marker_conf = sheet_conf.get("marker") or sheet_conf.get("skip")
+        if marker_conf:
+            # 支援新 key（known_correct / known_incorrect）與舊 key（correct / false）
+            correct_skip = set(
+                marker_conf.get("known_correct",
+                                marker_conf.get("correct", []))
+            )
+            false_skip = set(
+                marker_conf.get("known_incorrect",
+                                marker_conf.get("false", []))
+            )
         else:
             correct_skip = false_skip = None
 
@@ -192,17 +227,23 @@ def compare_excel_sheets(config: Dict[str, Any]):
         # ---------- 輸出結果 ----------
         if real_errors == 0:
             msg = f"{GREEN}✓ PASS{RESET}"
-            if skip_conf:
-                msg += f"（預期改動 {expected_changes} 格）"
+            if marker_conf:
+                parts = []
+                if expected_changes:
+                    parts.append(f"{GREEN}{expected_changes} 已確認正確改動{RESET}")
+                if false_skips:
+                    parts.append(f"{YELLOW}{false_skips} 已確認問題{RESET}")
+                if parts:
+                    msg += "（" + "，".join(parts) + "）"
             print(f"  {msg}")
         else:
-            if skip_conf:
+            if marker_conf:
                 print(
                     f"  {RED}✗ FAILED{RESET} "
                     f"("
-                    f"{GREEN}{expected_changes} 個人工標記預期改動{RESET} + "
-                    f"{RED}{false_skips} 個人工標記標記確認錯誤{RESET} + "
-                    f"{PURPLE}{real_errors} 個未確認錯誤{RESET}"
+                    f"{GREEN}{expected_changes} 已確認正確改動{RESET} + "
+                    f"{YELLOW}{false_skips} 已確認問題{RESET} + "
+                    f"{PURPLE}{real_errors} 非預期錯誤{RESET}"
                     f")"
                 )
             else:
@@ -214,26 +255,3 @@ def compare_excel_sheets(config: Dict[str, Any]):
             if len(errors) > 5:
                 print(f"    ... 以及其餘 {len(errors) - 5} 個錯誤")
 
-# EXAMPLE_CONFIG = {
-#     "target_path": "../final/Merged_Result_Split.xlsx",      # 剛生成的檔案
-#     "bench_path": "../final/[TESTSPLIT] Merged_Result_Split.xlsx",       # 之前確認過的正確備份
-#     "sheets": [
-#         {
-#             "target_sheet": "校名權控表單",
-#             "bench_sheet": "Sheet1",
-#             "checks": ["content", "color", "freeze", "hidden"],
-#             "mask": {                        # ← 新增：行/欄/儲存格過濾
-#                 "include_rows": [1, 2, 3],   # 只比對這些行 (1-indexed)
-#                 "exclude_rows": [5],          # 跳過這些行
-#                 "include_cols": ["A", "B"],   # 只比對這些欄
-#                 "exclude_cols": ["C"],         # 跳過這些欄
-#                 "exclude_cells": ["A1"],       # 跳過特定儲存格
-#             }
-#         },
-#         {
-#             "target_sheet": "新增機構候選人",
-#             "bench_sheet": "工作表2",
-#             "checks": ["content", "color"]
-#         }
-#     ]
-# }

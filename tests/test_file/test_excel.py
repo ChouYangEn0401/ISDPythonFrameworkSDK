@@ -23,15 +23,15 @@ TEST_CONFIG = {
             "checks": ["content", "freeze", "hidden", "color"],
             # 以下為 mask 範例，可視需要取消註解：
             # "mask": {
-            #     "include_rows": [1, 2, 3],      # 只比對這些行（1-indexed）
+            #     "include_rows": [1, 2, 3],            # 只比對這些行（1-indexed）
             #     "exclude_rows": [],
-            #     "include_cols": ["A", "B", "C"], # 只比對這些欄
+            #     "include_cols": ["A", "B", "C"],      # 只比對這些欄
             #     "exclude_cols": [],
-            #     "exclude_cells": ["A1"],          # 跳過特定儲存格
+            #     "exclude_cells": ["A1"],              # 跳過特定儲存格
             # },
-            # "skip": {
-            #     "correct": [],   # 預期中的改動（不計入錯誤）
-            #     "false":   [],   # 已知假錯誤（不計入錯誤）
+            # "marker": {
+            #     "known_correct":   ["A1", "B2"],     # 版本更新的正確改動 → 計入「已確認正確改動」
+            #     "known_incorrect": ["C3"],           # 已確認問題               → 計入「已確認問題」
             # },
         },
     ],
