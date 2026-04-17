@@ -6,8 +6,9 @@ Config 範例::
     {
         "target_path": "output.txt",
         "bench_path":  "expected.txt",
-        "encoding":    "utf-8",             # 選填
-        "strip":       true,                # 選填，比對前是否去除首尾空白
+        "encoding":    "utf-8",              # 選填
+        "strip":       true,                 # 選填，比對前是否去除首尾空白
+        "case":        "upper",              # 選填: "upper" | "lower"，比對前統一大小寫
         "checks":      ["content", "line_count"],
         "mask": {                            # 選填
             "include_rows": [1, 2, 3],       # 1-indexed
@@ -30,6 +31,7 @@ def compare_txt_files(config: Dict[str, Any]) -> bool:
     bench_path  = config["bench_path"]
     encoding    = config.get("encoding", "utf-8")
     strip       = config.get("strip", False)
+    case        = config.get("case")
     checks      = config.get("checks", ["content"])
     mask        = config.get("mask")
 
@@ -64,6 +66,12 @@ def compare_txt_files(config: Dict[str, Any]) -> bool:
             if strip:
                 tl = tl.strip()
                 bl = bl.strip()
+            if case == "upper":
+                tl = tl.upper()
+                bl = bl.upper()
+            elif case == "lower":
+                tl = tl.lower()
+                bl = bl.lower()
             if tl != bl:
                 errors.append(f"第 {r} 行: {colorize_diff(repr(tl), repr(bl))}")
 
