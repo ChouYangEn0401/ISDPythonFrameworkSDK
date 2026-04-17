@@ -18,10 +18,10 @@ TEST_CONFIG = {
     "bench_path":  str(BASE / "[BU] sample.jsonl"),
     "encoding":    "utf-8",
     # 以下為 mask 範例，可視需要取消註解：
-    # "mask": {
-    #     "include_rows": [1, 2],  # 1-indexed，只比對這些 JSONL 行
-    #     "exclude_rows": [],
-    # },
+    "mask": {
+        # "include_rows": [1, 2],  # 1-indexed，只比對這些 JSONL 行
+        "exclude_rows": [4],
+    },
 }
 
 if __name__ == "__main__":

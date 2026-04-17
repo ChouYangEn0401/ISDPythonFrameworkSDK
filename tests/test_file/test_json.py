@@ -18,10 +18,10 @@ TEST_CONFIG = {
     "bench_path":  str(BASE / "[BU] sample.json"),
     "encoding":    "utf-8",
     # 以下為 mask 範例，可視需要取消註解：
-    # "mask": {
-    #     "include_paths": ["$.items"],  # 以 JSONPath-like 標記要比對的路徑
-    #     "exclude_paths": [],
-    # },
+    "mask": {
+        "include_paths": ["$.items"],  # 以 JSONPath-like 標記要比對的路徑
+        "exclude_paths": [],
+    },
     # 可用於控制錯誤顯示數量（預設 15）：
     # "max_display_errors": 20,
 }

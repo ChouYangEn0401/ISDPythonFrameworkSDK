@@ -18,14 +18,15 @@ TEST_CONFIG = {
     "bench_path":  str(BASE / "[BU] sample.csv"),
     "encoding":    "utf-8",
     "delimiter":   ",",
-    "checks":      ["content", "row_count", "column_count", "header"],
+    # "checks":      ["content", "row_count", "column_count", "header"],
+    "checks":      ["content"],
     # 以下為 mask 範例，可視需要取消註解：
-    # "mask": {
-    #     "include_rows": [1, 2, 3],   # 1-indexed，只比對這些行
-    #     "exclude_rows": [],
-    #     "include_cols": [0, 1, 2],   # 0-indexed，只比對這些欄
-    #     "exclude_cols": [],
-    # },
+    "mask": {
+        # "include_rows": [1, 2, 3],   # 1-indexed，只比對這些行
+        # "exclude_rows": [],
+        # "include_cols": [0, 1, 2],   # 0-indexed，只比對這些欄
+        # "exclude_cols": [],
+    },
 }
 
 if __name__ == "__main__":

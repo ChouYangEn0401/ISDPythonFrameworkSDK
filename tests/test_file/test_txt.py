@@ -18,6 +18,7 @@ TEST_CONFIG = {
     "bench_path":  str(BASE / "[BU] sample.txt"),
     "encoding":    "utf-8",
     "strip":       False,
+    "case":        "upper",
     "checks":      ["content", "line_count"],
     # 以下為 mask 範例，可視需要取消註解：
     # "mask": {
