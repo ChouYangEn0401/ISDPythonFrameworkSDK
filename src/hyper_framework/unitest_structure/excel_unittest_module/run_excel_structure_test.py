@@ -1,7 +1,6 @@
 from openpyxl import load_workbook
 from typing import Dict, Any
 from openpyxl.utils import get_column_letter
-from .._shared import CompareResult
 
 # --- 顏色與格式化輸出 ---
 GREEN = "\033[92m"
@@ -32,20 +31,19 @@ def compare_excel_sheets(config: Dict[str, Any]):
     target_path = config['target_path']
     bench_path = config['bench_path']
 
-    print(f"\n{CYAN}[Excel] 開始對照測試...{RESET}")
+    print(f"\n🚀 {CYAN}開始對照測試...{RESET}")
     print(f"待測檔: {target_path}")
     print(f"標準檔: {bench_path}\n")
 
     wb_t = load_workbook(target_path, data_only=True)
     wb_b = load_workbook(bench_path, data_only=True)
 
-    _combined_errors: list = []
     for sheet_conf in config['sheets']:
         t_name = sheet_conf['target_sheet']
         b_name = sheet_conf['bench_sheet']
         checks = sheet_conf.get('checks', [])
 
-        print(f"[Sheet] [{t_name}] vs [{b_name}]")
+        print(f"📦 檢查工作表: [{t_name}] vs [{b_name}]")
 
         ws_t = wb_t[t_name]
         ws_b = wb_b[b_name]
@@ -215,15 +213,6 @@ def compare_excel_sheets(config: Dict[str, Any]):
 
             if len(errors) > 5:
                 print(f"    ... 以及其餘 {len(errors) - 5} 個錯誤")
-
-        for _err in errors:
-            _combined_errors.append(f"[{t_name}] {_err}")
-
-    return CompareResult(
-        label=f"Excel: {target_path}",
-        passed=not _combined_errors,
-        errors=_combined_errors,
-    )
 
 # EXAMPLE_CONFIG = {
 #     "target_path": "../final/Merged_Result_Split.xlsx",      # 剛生成的檔案
