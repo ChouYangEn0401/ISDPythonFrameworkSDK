@@ -101,7 +101,21 @@ def deep_compare(
         ):
             return errors
 
-    # ── type mismatch ──
+    # ── bool first (bool is a subclass of int; must check before numeric) ──
+    if isinstance(actual, bool) or isinstance(expected, bool):
+        if type(actual) is not type(expected):
+            errors.append((path, "型別不同", type(actual).__name__, type(expected).__name__))
+        elif actual != expected:
+            errors.append((path, "值不同", repr(actual), repr(expected)))
+        return errors
+
+    # ── numeric coercion: int and float are compared by value, not by type ──
+    if isinstance(actual, (int, float)) and isinstance(expected, (int, float)):
+        if actual != expected:
+            errors.append((path, "值不同", repr(actual), repr(expected)))
+        return errors
+
+    # ── other type mismatches ──
     if type(actual) is not type(expected):
         errors.append((path, "型別不同", type(actual).__name__, type(expected).__name__))
         return errors
@@ -119,10 +133,17 @@ def deep_compare(
 
     # ── list ──
     elif isinstance(expected, list):
+        min_len = min(len(actual), len(expected))
         if len(actual) != len(expected):
             errors.append((path, "長度不同", len(actual), len(expected)))
-        for i in range(min(len(actual), len(expected))):
+        for i in range(min_len):
             deep_compare(actual[i], expected[i], f"{path}[{i}]", errors, exclude_paths, include_paths)
+        # enumerate extra items in actual (target has more)
+        for i in range(min_len, len(actual)):
+            errors.append((f"{path}[{i}]", "多餘項目", repr(actual[i]), "（無）"))
+        # enumerate missing items (bench has more)
+        for i in range(min_len, len(expected)):
+            errors.append((f"{path}[{i}]", "缺少項目", "（缺失）", repr(expected[i])))
 
     # ── scalar ──
     else:
