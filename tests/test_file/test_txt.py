@@ -9,7 +9,7 @@ TXT 純文字比對測試 — sample demo
     python tests/test_file/test_txt.py
 """
 from pathlib import Path
-from hyper_framework.unitest_structure.txt_unittest_module import compare_txt_files
+from hyper_framework.file_compare.txt_unittest_module import compare_txt_files
 
 BASE = Path(__file__).parent / "base"
 

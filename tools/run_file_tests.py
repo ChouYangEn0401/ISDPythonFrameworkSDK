@@ -75,17 +75,17 @@ if _src.exists() and str(_src) not in sys.path:
 
 # ── format → (module, function) ──────────────────────────────────────────
 _DISPATCH: Dict[str, tuple] = {
-    "csv":   ("hyper_framework.unitest_structure.csv_unittest_module",   "compare_csv_files"),
-    "json":  ("hyper_framework.unitest_structure.json_unittest_module",  "compare_json_files"),
-    "jsonl": ("hyper_framework.unitest_structure.jsonl_unittest_module", "compare_jsonl_files"),
-    "txt":   ("hyper_framework.unitest_structure.txt_unittest_module",   "compare_txt_files"),
-    "yaml":  ("hyper_framework.unitest_structure.yaml_unittest_module",  "compare_yaml_files"),
-    "yml":   ("hyper_framework.unitest_structure.yaml_unittest_module",  "compare_yaml_files"),
-    "xml":   ("hyper_framework.unitest_structure.xml_unittest_module",   "compare_xml_files"),
-    "ini":   ("hyper_framework.unitest_structure.ini_unittest_module",   "compare_ini_files"),
-    "toml":  ("hyper_framework.unitest_structure.toml_unittest_module",  "compare_toml_files"),
-    "excel": ("hyper_framework.unitest_structure.excel_unittest_module", "compare_excel_sheets"),
-    "xlsx":  ("hyper_framework.unitest_structure.excel_unittest_module", "compare_excel_sheets"),
+    "csv":   ("hyper_framework.file_compare.csv_unittest_module",   "compare_csv_files"),
+    "json":  ("hyper_framework.file_compare.json_unittest_module",  "compare_json_files"),
+    "jsonl": ("hyper_framework.file_compare.jsonl_unittest_module", "compare_jsonl_files"),
+    "txt":   ("hyper_framework.file_compare.txt_unittest_module",   "compare_txt_files"),
+    "yaml":  ("hyper_framework.file_compare.yaml_unittest_module",  "compare_yaml_files"),
+    "yml":   ("hyper_framework.file_compare.yaml_unittest_module",  "compare_yaml_files"),
+    "xml":   ("hyper_framework.file_compare.xml_unittest_module",   "compare_xml_files"),
+    "ini":   ("hyper_framework.file_compare.ini_unittest_module",   "compare_ini_files"),
+    "toml":  ("hyper_framework.file_compare.toml_unittest_module",  "compare_toml_files"),
+    "excel": ("hyper_framework.file_compare.excel_unittest_module", "compare_excel_sheets"),
+    "xlsx":  ("hyper_framework.file_compare.excel_unittest_module", "compare_excel_sheets"),
 }
 
 
@@ -108,7 +108,7 @@ def _load_config(path: str) -> dict:
 
 
 def _run_single(test: dict):
-    from hyper_framework.unitest_structure._shared import CompareResult
+    from hyper_framework.file_compare._shared import CompareResult
 
     fmt = test.get("format", "").lower().lstrip(".")
     label = test.get("label", fmt)
@@ -188,7 +188,7 @@ def main(argv: List[str] | None = None) -> int:
 
     # ── HTML report ───────────────────────────────────────────────────────
     if args.html:
-        from hyper_framework.unitest_structure.html_report import generate_html_report
+        from hyper_framework.file_compare.html_report import generate_html_report
         generate_html_report(results, args.html, title=args.title)
 
     return 0 if failed == 0 else 1

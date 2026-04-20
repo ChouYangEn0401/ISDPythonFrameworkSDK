@@ -9,7 +9,7 @@ JSONL 結構比對測試 — sample demo
     python tests/test_file/test_jsonl.py
 """
 from pathlib import Path
-from hyper_framework.unitest_structure.jsonl_unittest_module import compare_jsonl_files
+from hyper_framework.file_compare.jsonl_unittest_module import compare_jsonl_files
 
 BASE = Path(__file__).parent / "base"
 

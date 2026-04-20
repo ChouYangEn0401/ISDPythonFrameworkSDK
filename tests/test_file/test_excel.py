@@ -9,7 +9,7 @@ Excel 結構比對測試 — sample demo
     python tests/test_file/test_excel.py
 """
 from pathlib import Path
-from hyper_framework.unitest_structure.excel_unittest_module import compare_excel_sheets
+from hyper_framework.file_compare.excel_unittest_module import compare_excel_sheets
 
 BASE = Path(__file__).parent / "base"
 

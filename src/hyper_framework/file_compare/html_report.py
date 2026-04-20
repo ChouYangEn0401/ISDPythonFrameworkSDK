@@ -1,12 +1,12 @@
 """
-unitest_structure.html_report
-──────────────────────────────
+file_compare.html_report
+─────────────────────────
 Generate a self-contained HTML diff report from a list of CompareResult objects.
 
 Usage::
 
-    from hyper_framework.unitest_structure.html_report import generate_html_report
-    from hyper_framework.unitest_structure.csv_unittest_module import compare_csv_files
+    from hyper_framework.file_compare.html_report import generate_html_report
+    from hyper_framework.file_compare.csv_unittest_module import compare_csv_files
 
     r1 = compare_csv_files({...})
     r2 = compare_csv_files({...})

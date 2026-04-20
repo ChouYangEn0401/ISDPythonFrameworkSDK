@@ -1,5 +1,5 @@
 """INI 比對測試 — 使用 compare_ini_files()"""
-from hyper_framework.unitest_structure.ini_unittest_module import compare_ini_files
+from hyper_framework.file_compare.ini_unittest_module import compare_ini_files
 
 
 class TestINI:

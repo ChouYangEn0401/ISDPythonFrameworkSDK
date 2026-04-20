@@ -84,17 +84,18 @@ hyper_framework/
 │       ├── gui.py                     # GUI 操作例外
 │       ├── monitoring.py              # 監察 / 觀測例外
 │       └── ai_training.py             # AI / ML 訓練例外
-└── unitest_structure/         # 檔案比對測試工具
+└── file_compare/              # 多格式檔案比對工具
     ├── _shared.py                     # 共用色彩常數 & 比對工具函式
-    ├── excel_unittest_module/         # Excel 比對（需 [excel] extras）
+    ├── html_report.py                 # 產生 HTML 比對報告
     ├── csv_unittest_module/           # CSV 比對
+    ├── excel_unittest_module/         # Excel 比對（需 [excel] extras）
+    ├── ini_unittest_module/           # INI 比對
     ├── json_unittest_module/          # JSON 比對
     ├── jsonl_unittest_module/         # JSONL 比對
+    ├── toml_unittest_module/          # TOML 比對（Python 3.11+）
     ├── txt_unittest_module/           # TXT 純文字比對
-    ├── yaml_unittest_module/          # YAML 比對（需 [yaml] extras）
     ├── xml_unittest_module/           # XML 比對
-    ├── ini_unittest_module/           # INI 比對
-    └── toml_unittest_module/          # TOML 比對（Python 3.11+）
+    └── yaml_unittest_module/          # YAML 比對（需 [yaml] extras）
 ```
 
 ---
@@ -1230,14 +1231,13 @@ from hyper_framework import (
 
 ---
 
-## `unitest_structure` — 檔案比對測試工具
+## `file_compare` — 多格式檔案比對工具
 
-提供多種檔案格式的快速比對工具，用於驗證輸出檔案是否與預期一致。
-所有模組共享統一的 Config 介面與 **Masking** 機制。
+快速比對「待測輸出」與「預期標準」，支援 9 種檔案格式，共享統一的 Config 介面與 **Masking** 機制。
 
 ### 支援格式
 
-| 格式 | 模組 | 函式 | 額外套件 |
+| 格式 | 子模組 | 函式 | 額外套件 |
 |---|---|---|---|
 | Excel (.xlsx) | `excel_unittest_module` | `compare_excel_sheets` | `openpyxl` |
 | CSV | `csv_unittest_module` | `compare_csv_files` | — |
@@ -1322,7 +1322,7 @@ pip install isd-python-framework[all]
 #### Excel
 
 ```python
-from hyper_framework.unitest_structure.excel_unittest_module import compare_excel_sheets
+from hyper_framework.file_compare.excel_unittest_module import compare_excel_sheets
 
 compare_excel_sheets({
     "target_path": "output.xlsx",
@@ -1352,7 +1352,7 @@ compare_excel_sheets({
 #### CSV
 
 ```python
-from hyper_framework.unitest_structure.csv_unittest_module import compare_csv_files
+from hyper_framework.file_compare.csv_unittest_module import compare_csv_files
 
 compare_csv_files({
     "target_path": "output.csv",
@@ -1367,7 +1367,7 @@ compare_csv_files({
 #### JSON
 
 ```python
-from hyper_framework.unitest_structure.json_unittest_module import compare_json_files
+from hyper_framework.file_compare.json_unittest_module import compare_json_files
 
 compare_json_files({
     "target_path": "output.json",
@@ -1379,7 +1379,7 @@ compare_json_files({
 #### JSONL
 
 ```python
-from hyper_framework.unitest_structure.jsonl_unittest_module import compare_jsonl_files
+from hyper_framework.file_compare.jsonl_unittest_module import compare_jsonl_files
 
 compare_jsonl_files({
     "target_path": "output.jsonl",
@@ -1391,12 +1391,13 @@ compare_jsonl_files({
 #### TXT
 
 ```python
-from hyper_framework.unitest_structure.txt_unittest_module import compare_txt_files
+from hyper_framework.file_compare.txt_unittest_module import compare_txt_files
 
 compare_txt_files({
     "target_path": "output.txt",
     "bench_path":  "expected.txt",
     "strip":  True,                        # 選填，去除首尾空白再比對
+    "case":   "upper",                     # 選填: "upper" | "lower"，比對前統一大小寫
     "checks": ["content", "line_count"],
     "mask":   {"exclude_rows": [1, 2]},
 })
@@ -1405,7 +1406,7 @@ compare_txt_files({
 #### YAML
 
 ```python
-from hyper_framework.unitest_structure.yaml_unittest_module import compare_yaml_files
+from hyper_framework.file_compare.yaml_unittest_module import compare_yaml_files
 
 compare_yaml_files({
     "target_path": "output.yaml",
@@ -1417,7 +1418,7 @@ compare_yaml_files({
 #### XML
 
 ```python
-from hyper_framework.unitest_structure.xml_unittest_module import compare_xml_files
+from hyper_framework.file_compare.xml_unittest_module import compare_xml_files
 
 compare_xml_files({
     "target_path": "output.xml",
@@ -1430,7 +1431,7 @@ compare_xml_files({
 #### INI
 
 ```python
-from hyper_framework.unitest_structure.ini_unittest_module import compare_ini_files
+from hyper_framework.file_compare.ini_unittest_module import compare_ini_files
 
 compare_ini_files({
     "target_path": "output.ini",
@@ -1445,7 +1446,7 @@ compare_ini_files({
 #### TOML
 
 ```python
-from hyper_framework.unitest_structure.toml_unittest_module import compare_toml_files
+from hyper_framework.file_compare.toml_unittest_module import compare_toml_files
 
 compare_toml_files({
     "target_path": "output.toml",

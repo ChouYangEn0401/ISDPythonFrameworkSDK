@@ -1,6 +1,6 @@
 """
-unitest_structure._shared
-─────────────────────────
+file_compare._shared
+─────────────────────
 Shared colour constants and helpers for all file-comparison modules.
 """
 from dataclasses import dataclass, field as _dataclass_field

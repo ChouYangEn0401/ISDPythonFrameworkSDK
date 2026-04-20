@@ -1,5 +1,5 @@
 """CSV 比對測試 — 使用 compare_csv_files()"""
-from hyper_framework.unitest_structure.csv_unittest_module import compare_csv_files
+from hyper_framework.file_compare.csv_unittest_module import compare_csv_files
 
 
 class TestCSV:

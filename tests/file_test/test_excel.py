@@ -3,7 +3,7 @@ import pytest
 
 pytest.importorskip("openpyxl")
 
-from hyper_framework.unitest_structure.excel_unittest_module import compare_excel_sheets
+from hyper_framework.file_compare.excel_unittest_module import compare_excel_sheets
 
 
 def _excel_cfg(base_cfg, **sheet_kw):

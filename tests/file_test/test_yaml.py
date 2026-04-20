@@ -3,7 +3,7 @@ import pytest
 
 pytest.importorskip("yaml")
 
-from hyper_framework.unitest_structure.yaml_unittest_module import compare_yaml_files
+from hyper_framework.file_compare.yaml_unittest_module import compare_yaml_files
 
 
 class TestYAML:

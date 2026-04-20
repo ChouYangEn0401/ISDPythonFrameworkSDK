@@ -1,18 +1,22 @@
 """
 全格式一鍵測試 — run all sample demos
 =======================================
-一次執行所有格式的比對測試（csv / excel / jsonl / txt），
-最後彙整顯示哪些通過、哪些失敗。
+一次執行所有支援格式的比對測試，最後彙整顯示通過 / 失敗。
 
 執行方式（安裝 wheel 之後）：
     python tests/test_file/run_all.py
 """
 from pathlib import Path
 
-from hyper_framework.unitest_structure.csv_unittest_module   import compare_csv_files
-from hyper_framework.unitest_structure.excel_unittest_module import compare_excel_sheets
-from hyper_framework.unitest_structure.jsonl_unittest_module import compare_jsonl_files
-from hyper_framework.unitest_structure.txt_unittest_module   import compare_txt_files
+from hyper_framework.file_compare.csv_unittest_module   import compare_csv_files
+from hyper_framework.file_compare.excel_unittest_module import compare_excel_sheets
+from hyper_framework.file_compare.json_unittest_module  import compare_json_files
+from hyper_framework.file_compare.jsonl_unittest_module import compare_jsonl_files
+from hyper_framework.file_compare.txt_unittest_module   import compare_txt_files
+from hyper_framework.file_compare.xml_unittest_module   import compare_xml_files
+from hyper_framework.file_compare.ini_unittest_module   import compare_ini_files
+from hyper_framework.file_compare.toml_unittest_module  import compare_toml_files
+from hyper_framework.file_compare.yaml_unittest_module  import compare_yaml_files
 
 BASE = Path(__file__).parent / "base"
 
@@ -38,6 +42,12 @@ EXCEL_CONFIG = {
     ],
 }
 
+JSON_CONFIG = {
+    "target_path": str(BASE / "sample.json"),
+    "bench_path":  str(BASE / "[BU] sample.json"),
+    "encoding":    "utf-8",
+}
+
 JSONL_CONFIG = {
     "target_path": str(BASE / "sample.jsonl"),
     "bench_path":  str(BASE / "[BU] sample.jsonl"),
@@ -50,6 +60,30 @@ TXT_CONFIG = {
     "encoding":    "utf-8",
     "strip":       False,
     "checks":      ["content", "line_count"],
+}
+
+XML_CONFIG = {
+    "target_path": str(BASE / "sample.xml"),
+    "bench_path":  str(BASE / "[BU] sample.xml"),
+    "encoding":    "utf-8",
+    "checks":      ["tag", "text", "attrib", "children_count"],
+}
+
+INI_CONFIG = {
+    "target_path": str(BASE / "sample.ini"),
+    "bench_path":  str(BASE / "[BU] sample.ini"),
+    "encoding":    "utf-8",
+}
+
+TOML_CONFIG = {
+    "target_path": str(BASE / "sample.toml"),
+    "bench_path":  str(BASE / "[BU] sample.toml"),
+}
+
+YAML_CONFIG = {
+    "target_path": str(BASE / "sample.yaml"),
+    "bench_path":  str(BASE / "[BU] sample.yaml"),
+    "encoding":    "utf-8",
 }
 
 # ── 執行 ──────────────────────────────────────────────────────────────────
@@ -75,8 +109,13 @@ if __name__ == "__main__":
     suite = [
         ("CSV",   compare_csv_files,   CSV_CONFIG),
         ("Excel", compare_excel_sheets, EXCEL_CONFIG),
+        ("JSON",  compare_json_files,   JSON_CONFIG),
         ("JSONL", compare_jsonl_files,  JSONL_CONFIG),
         ("TXT",   compare_txt_files,    TXT_CONFIG),
+        ("XML",   compare_xml_files,    XML_CONFIG),
+        ("INI",   compare_ini_files,    INI_CONFIG),
+        ("TOML",  compare_toml_files,   TOML_CONFIG),
+        ("YAML",  compare_yaml_files,   YAML_CONFIG),
     ]
 
     results = {}

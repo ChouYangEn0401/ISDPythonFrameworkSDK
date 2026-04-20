@@ -1,5 +1,5 @@
 """TXT 比對測試 — 使用 compare_txt_files()"""
-from hyper_framework.unitest_structure.txt_unittest_module import compare_txt_files
+from hyper_framework.file_compare.txt_unittest_module import compare_txt_files
 
 
 class TestTXT:
