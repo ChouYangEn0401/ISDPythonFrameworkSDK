@@ -3,6 +3,12 @@ import pytest
 
 pytest.importorskip("openpyxl")
 
+import pytest
+
+# Skip if Excel backends are not installed
+pytest.importorskip("openpyxl")
+pytest.importorskip("pandas")
+
 from hyper_framework.file_compare import compare_excel_sheets
 
 

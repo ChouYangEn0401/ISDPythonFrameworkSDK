@@ -8,7 +8,7 @@ import traceback
 
 sys.path.insert(0, "src")
 
-from hyper_framework.assertions import (
+from hyper_framework.helpers.assertions import (
     # type
     assert__is_str,
     assert__is_int,

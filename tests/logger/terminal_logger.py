@@ -1,4 +1,4 @@
-from hyper_framework.msg_logger import SingletonSystemLogger, DarkThemeTerminalAdapter
+from hyper_framework.message_logger import SingletonSystemLogger, DarkThemeTerminalAdapter
 
 logger = SingletonSystemLogger()
 logger.register_adapter(DarkThemeTerminalAdapter("DEBUG"))

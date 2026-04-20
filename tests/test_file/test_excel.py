@@ -9,6 +9,12 @@ Excel 結構比對測試 — sample demo
     python tests/test_file/test_excel.py
 """
 from pathlib import Path
+import pytest
+
+# Skip if Excel backends are not installed
+pytest.importorskip("openpyxl")
+pytest.importorskip("pandas")
+
 from hyper_framework.file_compare import compare_excel_sheets
 
 BASE = Path(__file__).parent / "base"

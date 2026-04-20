@@ -1,4 +1,4 @@
-from hyper_framework.events_bus import MulticastCallback
+from hyper_framework.events import MulticastCallback
 from typing import Callable, List
 
 result_list = []

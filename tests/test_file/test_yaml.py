@@ -9,6 +9,11 @@ YAML 結構比對測試 — sample demo
     python tests/test_file/test_yaml.py
 """
 from pathlib import Path
+import pytest
+
+# Skip if YAML backend is not installed
+pytest.importorskip("yaml")
+
 from hyper_framework.file_compare import compare_yaml_files
 
 BASE = Path(__file__).parent / "base"

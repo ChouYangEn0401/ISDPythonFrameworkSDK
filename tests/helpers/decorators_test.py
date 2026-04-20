@@ -10,7 +10,7 @@ import warnings
 
 sys.path.insert(0, "src")
 
-from hyper_framework.decorators import (
+from hyper_framework.helpers.decorators import (
     # profiling
     function_timer, timed_and_conditional_return, log_call, count_calls, profile_memory,
     # lifecycle

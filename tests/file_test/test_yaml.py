@@ -3,6 +3,11 @@ import pytest
 
 pytest.importorskip("yaml")
 
+import pytest
+
+# Skip if YAML backend is not installed
+pytest.importorskip("yaml")
+
 from hyper_framework.file_compare import compare_yaml_files
 
 
