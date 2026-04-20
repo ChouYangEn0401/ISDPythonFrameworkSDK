@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "isd-python-framework"
-version = "0.1.0"
+dynamic = ["version"]
 description = "ISD Python Framework — The foundational base framework for ISD module development"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,9 +13,7 @@ authors = [
     { name = "周暘恩", email = "chouyangen0401@ntu.edu.tw" },
     { name = "Anthony Chou", email = "mi.anthony.chou@gmail.com" },
 ]
-dependencies = [
-    "colorama>=0.4.6",
-]
+dependencies = []
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -23,30 +21,51 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.dynamic]
+version = { attr = "hyper_framework._version.__version__" }
+
 [project.optional-dependencies]
-# pip install isd-python-framework[dev]
+# Optional extras grouped by real subpackage names. Default install is the
+# core framework only (no optional heavy backends). Users can opt into the
+# extra features they need using extras named after modules.
+
+# Development helpers (tests, formatting)
 dev = [
     "pytest>=7.0",
     "black>=24.0",
 ]
-# pip install isd-python-framework[excel]
-excel = [
+
+# Terminal/color support for the message logger
+message_logger = [
+    "colorama>=0.4.6",
+]
+
+# Excel backend for file_compare (openpyxl + pandas)
+"file_compare.excel" = [
     "openpyxl>=3.1",
     "pandas>=2.0",
 ]
-# pip install isd-python-framework[yaml]
-yaml = [
+
+# YAML backend for file_compare
+"file_compare.yaml" = [
     "pyyaml>=6.0",
 ]
-# pip install isd-python-framework[filetest]  (excel + yaml — CSV/JSON/TXT/XML/INI/TOML 內建不需額外套件)
-filetest = [
+
+# Convenience: all file_compare backends
+file_compare = [
     "openpyxl>=3.1",
     "pandas>=2.0",
     "pyyaml>=6.0",
 ]
-# pip install isd-python-framework[all]
+
+# All-including convenience (dev + file_compare + message_logger)
 all = [
-    "isd-python-framework[dev,filetest]",
+    "pytest>=7.0",
+    "black>=24.0",
+    "openpyxl>=3.1",
+    "pandas>=2.0",
+    "pyyaml>=6.0",
+    "colorama>=0.4.6",
 ]
 
 [project.scripts]

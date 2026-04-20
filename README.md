@@ -17,36 +17,37 @@
 ---
 
 ## 安裝
+### 安裝說明（摘要）
 
-### 一、從 `.whl` 安裝（使用者）
-```bash
-pip install isd_python_framework-*.whl
-```
+- 本套件以 `hyper_framework` 為核心框架；預設安裝只會安裝核心（不包含 heavy 後端套件）。
+- 以 extras 明確安裝子套件所需的第三方依賴（extras 名稱對應到實際的子模組名稱），例如 `message_logger`、`file_compare.excel`、`file_compare.yaml`。
 
-### 二、可編輯模式安裝（開發者）
+範例：
+
 ```bash
+# 安裝核心（預設）
+pip install isd-python-framework
+
+# 可編輯（開發）模式安裝核心
 pip install -e .
+
+# 安裝 message_logger 的色彩支援
+pip install isd-python-framework[message_logger]
+
+# 安裝 file_compare 的 Excel 後端
+pip install isd-python-framework["file_compare.excel"]
+
+# 安裝 file_compare 的 YAML 後端
+pip install isd-python-framework["file_compare.yaml"]
+
+# 安裝所有 file_compare 後端（Excel + YAML）
+pip install isd-python-framework[file_compare]
+
+# 安裝開發工具與所有後端
+pip install isd-python-framework[all]
 ```
 
-### 三、含 Excel 測試工具
-```bash
-pip install -e ".[excel]"
-```
-
-### 四、含 YAML 測試工具
-```bash
-pip install -e ".[yaml]"
-```
-
-### 五、含全部檔案測試工具（Excel + YAML）
-```bash
-pip install -e ".[filetest]"
-```
-
-### 六、完整安裝（含所有 optional extras）
-```bash
-pip install -e ".[all]"
-```
+說明：extras 是加法；只安裝你需要的後端可減少不必要的依賴與安裝時間。若要改為預設包含所有後端，我可以把 `pyproject.toml` 的 `dependencies` 調整回之前的策略。
 
 ---
 
@@ -106,21 +107,20 @@ hyper_framework/
 
 ---
 
-## Import Namespaces — 短路徑總覽
 
-每個功能區塊都有專屬的短路徑 namespace，讓 import 更清晰：
+## Import Namespaces — 建議使用的 module 名稱
 
-| Namespace | 別名目標 | 代表成員 |
-|---|---|---|
-| `hyper_framework.interface` | `base/` + `window_design_helper/` | `SingletonMetaclass`, `IScalableWindowTester` |
-| `hyper_framework.events_bus` | `events/` | `SingletonEventManager`, `IEventBase`, `MulticastCallback`, … |
-| `hyper_framework.msg_logger` | `message_logger/` | `SingletonSystemLogger`, `DarkThemeTerminalAdapter`, … |
-| `hyper_framework.assertions` | `helpers/assertions/` | `assert__is_str`, `assert__in_range`, … |
-| `hyper_framework.decorators` | `helpers/decorators/` | `function_timer`, `retry`, `etl_step`, … |
-| `hyper_framework.exceptions` | `helpers/exceptions/` | `ValidationError`, `DataLoadError`, … |
-| `hyper_framework.file_compare` | `file_compare/` | `compare_csv_files`, `compare_json_files`, … |
+請以 `src/` 下的真實 module 名稱為主要匯入路徑；這讓使用者與套件結構一一對應，更直觀也更容易查找來源程式：
 
-> **向下相容：** `from hyper_framework import <symbol>` 頂層匯入仍然全數有效，短路徑 namespace 只是更清晰的替代選項。
+- `hyper_framework.base` — 核心設計模式與 `SingletonMetaclass`
+- `hyper_framework.events` — 事件系統（`SingletonEventManager`, `IEventBase`, `MulticastCallback`）
+- `hyper_framework.message_logger` — 系統日誌（`SingletonSystemLogger`, adapters）
+- `hyper_framework.helpers.assertions` — 斷言工具
+- `hyper_framework.helpers.decorators` — 裝飾器工具
+- `hyper_framework.helpers.exceptions` — 自訂例外
+- `hyper_framework.file_compare` — 多格式檔案比對工具（`compare_*` 函式）
+
+備註：為了向下相容，套件仍提供便捷短檔（例如 `interface.py`, `events_bus.py`, `msg_logger.py` 等），但文件與範例會以真實 module 名稱為主，避免混淆。
 
 ---
 
@@ -1292,16 +1292,19 @@ from hyper_framework.file_compare import compare_toml_files
 ### 安裝
 
 ```bash
-# Excel 工具
-pip install isd-python-framework[excel]
+# 安裝核心（無 heavy 後端）
+pip install isd-python-framework
 
-# YAML 工具
-pip install isd-python-framework[yaml]
+# 安裝 Excel 後端
+pip install isd-python-framework["file_compare.excel"]
 
-# 全部檔案測試工具（Excel + YAML；CSV/JSON/TXT/XML/INI/TOML 為內建無需額外安裝）
-pip install isd-python-framework[filetest]
+# 安裝 YAML 後端
+pip install isd-python-framework["file_compare.yaml"]
 
-# 全部（含 dev + filetest）
+# 安裝所有 file_compare 後端（Excel + YAML）
+pip install isd-python-framework[file_compare]
+
+# 安裝開發工具與所有後端
 pip install isd-python-framework[all]
 ```
 
