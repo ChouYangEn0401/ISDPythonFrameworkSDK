@@ -1,4 +1,4 @@
-from hyper_framework import SingletonEventManager, IEventBase, IParsEventBase
+from hyper_framework.events_bus import SingletonEventManager, IEventBase, IParsEventBase
 from dataclasses import dataclass
 
 

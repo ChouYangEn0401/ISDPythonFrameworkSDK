@@ -1,5 +1,5 @@
 """JSONL 比對測試 — 使用 compare_jsonl_files()"""
-from hyper_framework.file_compare.jsonl_unittest_module import compare_jsonl_files
+from hyper_framework.file_compare import compare_jsonl_files
 
 
 class TestJSONL:

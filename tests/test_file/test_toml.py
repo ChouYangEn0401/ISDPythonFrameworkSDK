@@ -9,7 +9,7 @@ TOML 結構比對測試 — sample demo
     python tests/test_file/test_toml.py
 """
 from pathlib import Path
-from hyper_framework.file_compare.toml_unittest_module import compare_toml_files
+from hyper_framework.file_compare import compare_toml_files
 
 BASE = Path(__file__).parent / "base"
 

@@ -9,7 +9,7 @@ CSV 結構比對測試 — sample demo
     python tests/test_file/test_csv.py
 """
 from pathlib import Path
-from hyper_framework.file_compare.csv_unittest_module import compare_csv_files
+from hyper_framework.file_compare import compare_csv_files
 
 BASE = Path(__file__).parent / "base"
 

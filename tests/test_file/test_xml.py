@@ -9,7 +9,7 @@ XML 結構比對測試 — sample demo
     python tests/test_file/test_xml.py
 """
 from pathlib import Path
-from hyper_framework.file_compare.xml_unittest_module import compare_xml_files
+from hyper_framework.file_compare import compare_xml_files
 
 BASE = Path(__file__).parent / "base"
 

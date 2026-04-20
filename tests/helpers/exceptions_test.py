@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, "src")
 
-from hyper_framework import (
+from hyper_framework.exceptions import (
     # legacy (backward-compat)
     WrongOptionException,
     WrongImplementationException,

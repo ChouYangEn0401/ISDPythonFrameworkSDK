@@ -84,19 +84,43 @@ hyper_framework/
 │       ├── gui.py                     # GUI 操作例外
 │       ├── monitoring.py              # 監察 / 觀測例外
 │       └── ai_training.py             # AI / ML 訓練例外
-└── file_compare/              # 多格式檔案比對工具
-    ├── _shared.py                     # 共用色彩常數 & 比對工具函式
-    ├── html_report.py                 # 產生 HTML 比對報告
-    ├── csv_unittest_module/           # CSV 比對
-    ├── excel_unittest_module/         # Excel 比對（需 [excel] extras）
-    ├── ini_unittest_module/           # INI 比對
-    ├── json_unittest_module/          # JSON 比對
-    ├── jsonl_unittest_module/         # JSONL 比對
-    ├── toml_unittest_module/          # TOML 比對（Python 3.11+）
-    ├── txt_unittest_module/           # TXT 純文字比對
-    ├── xml_unittest_module/           # XML 比對
-    └── yaml_unittest_module/          # YAML 比對（需 [yaml] extras）
+├── file_compare/              # 多格式檔案比對工具
+│   ├── _shared.py                     # 共用色彩常數 & 比對工具函式
+│   ├── html_report.py                 # 產生 HTML 比對報告
+│   ├── csv_unittest_module/           # CSV 比對
+│   ├── excel_unittest_module/         # Excel 比對（需 [excel] extras）
+│   ├── ini_unittest_module/           # INI 比對
+│   ├── json_unittest_module/          # JSON 比對
+│   ├── jsonl_unittest_module/         # JSONL 比對
+│   ├── toml_unittest_module/          # TOML 比對（Python 3.11+）
+│   ├── txt_unittest_module/           # TXT 純文字比對
+│   ├── xml_unittest_module/           # XML 比對
+│   └── yaml_unittest_module/          # YAML 比對（需 [yaml] extras）
+├── interface.py               # 短路徑別名：SingletonMetaclass, IScalableWindowTester
+├── events_bus.py              # 短路徑別名：事件系統（→ events/）
+├── msg_logger.py              # 短路徑別名：日誌系統（→ message_logger/）
+├── assertions.py              # 短路徑別名：斷言工具（→ helpers/assertions/）
+├── decorators.py              # 短路徑別名：裝飾器工具（→ helpers/decorators/）
+└── exceptions.py              # 短路徑別名：自訂例外（→ helpers/exceptions/）
 ```
+
+---
+
+## Import Namespaces — 短路徑總覽
+
+每個功能區塊都有專屬的短路徑 namespace，讓 import 更清晰：
+
+| Namespace | 別名目標 | 代表成員 |
+|---|---|---|
+| `hyper_framework.interface` | `base/` + `window_design_helper/` | `SingletonMetaclass`, `IScalableWindowTester` |
+| `hyper_framework.events_bus` | `events/` | `SingletonEventManager`, `IEventBase`, `MulticastCallback`, … |
+| `hyper_framework.msg_logger` | `message_logger/` | `SingletonSystemLogger`, `DarkThemeTerminalAdapter`, … |
+| `hyper_framework.assertions` | `helpers/assertions/` | `assert__is_str`, `assert__in_range`, … |
+| `hyper_framework.decorators` | `helpers/decorators/` | `function_timer`, `retry`, `etl_step`, … |
+| `hyper_framework.exceptions` | `helpers/exceptions/` | `ValidationError`, `DataLoadError`, … |
+| `hyper_framework.file_compare` | `file_compare/` | `compare_csv_files`, `compare_json_files`, … |
+
+> **向下相容：** `from hyper_framework import <symbol>` 頂層匯入仍然全數有效，短路徑 namespace 只是更清晰的替代選項。
 
 ---
 
@@ -108,7 +132,7 @@ hyper_framework/
 可選鉤子：若子類定義 `_initialize_manager(self)`，首次建立後自動呼叫一次。
 
 ```python
-from hyper_framework import SingletonMetaclass
+from hyper_framework.interface import SingletonMetaclass
 
 class MyManager(metaclass=SingletonMetaclass):
     def _initialize_manager(self):
@@ -131,7 +155,7 @@ assert a is b  # True
 在你的專案中定義事件，繼承對應的基底類別：
 
 ```python
-from hyper_framework import IEventBase, IParsEventBase
+from hyper_framework.events_bus import IEventBase, IParsEventBase
 from dataclasses import dataclass
 
 # 無參數事件
@@ -158,7 +182,7 @@ class OnDataLoaded(IParsEventBase):
 > 必須由呼叫端保持其強引用，或改用普通函式。
 
 ```python
-from hyper_framework import SingletonEventManager, IEventBase, IParsEventBase
+from hyper_framework.events_bus import SingletonEventManager, IEventBase, IParsEventBase
 from dataclasses import dataclass
 
 class OnJobDone(IEventBase): pass
@@ -234,7 +258,7 @@ Inner Progress: 50%
 適用場景：訂閱者比發布者**晚初始化**，需要在訂閱後補齊(replay)先前已觸發過的事件。
 
 ```python
-from hyper_framework import DelayEventBusManager, IDelayEventBase
+from hyper_framework.events_bus import DelayEventBusManager, IDelayEventBase
 
 class OnSystemReady(IDelayEventBase): pass
 
@@ -260,7 +284,7 @@ class LateModule:
 支持直接呼叫、合併（回傳新物件）以及以單一 callback 為單位移除。
 
 ```python
-from hyper_framework import MulticastCallback
+from hyper_framework.events_bus import MulticastCallback
 from typing import Callable, List
 
 # 實務範例：多個 handler 回應進度更新
@@ -345,7 +369,7 @@ SingletonSystemLogger（單例 orchestrator）
 ### 快速試用（可直接貼到 terminal 執行）
 
 ```python
-from hyper_framework import SingletonSystemLogger, DarkThemeTerminalAdapter
+from hyper_framework.msg_logger import SingletonSystemLogger, DarkThemeTerminalAdapter
 
 logger = SingletonSystemLogger()
 logger.register_adapter(DarkThemeTerminalAdapter("DEBUG"))
@@ -366,7 +390,7 @@ logger.shiny_log("閃亮登場", "SUCCESS")
 ### Adapter：`TerminalAdapter`（彩色 console）
 
 ```python
-from hyper_framework import (
+from hyper_framework.msg_logger import (
     SingletonSystemLogger,
     DarkThemeTerminalAdapter,
     LightThemeTerminalAdapter,
@@ -396,7 +420,7 @@ logger.register_adapter(adapter)
 
 ```python
 from pathlib import Path
-from hyper_framework import SingletonSystemLogger, FileAdapter, DarkThemeTerminalAdapter
+from hyper_framework.msg_logger import SingletonSystemLogger, FileAdapter, DarkThemeTerminalAdapter
 
 logger = SingletonSystemLogger()
 logger.clear_adapters()
@@ -419,7 +443,7 @@ print(Path("app.log").read_text(encoding="utf-8"))
 ```python
 import argparse
 import tkinter as tk
-from hyper_framework.message_logger import (
+from hyper_framework.msg_logger import (
     SingletonSystemLogger,
     DarkThemeTkinterAdapter,
     LightThemeTkinterAdapter,
@@ -474,7 +498,7 @@ if __name__ == "__main__":
 **延遲注入 widget（先建 adapter，UI 初始化後再綁定）：**
 
 ```python
-from hyper_framework.message_logger import SingletonSystemLogger, DarkThemeTkinterAdapter
+from hyper_framework.msg_logger import SingletonSystemLogger, DarkThemeTkinterAdapter
 
 logger = SingletonSystemLogger()
 adapter = DarkThemeTkinterAdapter("DEBUG")   # 先不傳 tk_window
@@ -506,7 +530,7 @@ logger.register_adapter(adapter)
 
 ```python
 from pathlib import Path
-from hyper_framework.message_logger import (
+from hyper_framework.msg_logger import (
     SingletonSystemLogger,
     DarkThemeTerminalAdapter,
     FileAdapter,
@@ -531,7 +555,7 @@ logger.warning("console + 檔案都看得到")
 繼承 `LoggerAdapterBase` 並實作 `broadcast()` 即可接入 logger。
 
 ```python
-from hyper_framework.message_logger import LoggerAdapterBase, SingletonSystemLogger
+from hyper_framework.msg_logger import LoggerAdapterBase, SingletonSystemLogger
 
 class SlackAdapter(LoggerAdapterBase):
     def __init__(self, level_filter: str, webhook_url: str):
@@ -595,10 +619,10 @@ $env:RUN_MODE="DISPLAY"; python your_script.py
 ## `helpers.assertions` — 斷言工具
 
 所有斷言成功回傳 `True`，失敗拋出 `TypeError` / `ValueError` / `KeyError`。
-可直接從頂層匯入，也可從子模組精準匯入。
+可從 `hyper_framework.assertions` 或各子模組精準匯入。
 
 ```python
-from hyper_framework import (
+from hyper_framework.assertions import (
     # 型別斷言
     assert__is_str, assert__is_int, assert__is_float, assert__is_number,
     assert__is_bool, assert__is_dict, assert__is_list, assert__is_tuple,
@@ -680,13 +704,13 @@ assert__matches_pattern("abc-123", r"[a-z]+-\d+")     # OK
 
 ## `helpers.decorators` — 裝飾器工具
 
-所有裝飾器可直接從頂層匯入：
+所有裝飾器可從 `hyper_framework.decorators` 匯入：
 
 ```python
-from hyper_framework import function_timer, retry, etl_step, ...
+from hyper_framework.decorators import function_timer, retry, etl_step, ...
 ```
 
-也可精準匯入（適合減少 import 污染）：
+也可精準匯入（保留子模組完整路徑）：
 
 ```python
 from hyper_framework.helpers.decorators.profiling import log_call
@@ -705,7 +729,7 @@ from hyper_framework.helpers.decorators.profiling import log_call
 | `@profile_memory` | 以 `tracemalloc` 測量記憶體峰值，印出每次呼叫的△ KB |
 
 ```python
-from hyper_framework import function_timer, timed_and_conditional_return, log_call, count_calls, profile_memory
+from hyper_framework.decorators import function_timer, timed_and_conditional_return, log_call, count_calls, profile_memory
 
 @function_timer
 def slow_task():
@@ -744,7 +768,7 @@ def load_big_file(path): ...
 | `@since(version)` | 靜態標記，說明此 API 自 *version* 起引入，無運行期副作用 |
 
 ```python
-from hyper_framework import deprecated, battered, experimental, removed_in, since
+from hyper_framework.decorators import deprecated, battered, experimental, removed_in, since
 
 @deprecated("Use `new_func` instead.")
 def old_func(): ...
@@ -775,7 +799,7 @@ def stable_feature(): ...
 | `@timeout(seconds)` | 超過指定秒數拋 `TimeoutError` |
 
 ```python
-from hyper_framework import retry, once, suppress_exceptions, throttle, timeout
+from hyper_framework.decorators import retry, once, suppress_exceptions, throttle, timeout
 
 @retry(max_attempts=5, delay=1.0, backoff=2.0, exceptions=(IOError,))
 def fetch(): ...  # 最多重試 5 次，延遲 1→2→4→8 秒
@@ -806,7 +830,7 @@ def slow_call(): ...  # 超過 5 秒拋 TimeoutError
 | `@synchronized` / `@synchronized(lock)` | 以 `Lock` 串列化存取，可多函式共用同一把鎖 |
 
 ```python
-from hyper_framework import run_in_thread, synchronized
+from hyper_framework.decorators import run_in_thread, synchronized
 import threading
 
 @run_in_thread
@@ -838,7 +862,7 @@ def write_b(): ...  # write_a 與 write_b 互斥
 | `@idempotent_load` | 以引數 hash 快取結果；相同引數不重複執行 |
 
 ```python
-from hyper_framework import etl_step, log_record_count, checkpoint, skip_on_empty, idempotent_load
+from hyper_framework.decorators import etl_step, log_record_count, checkpoint, skip_on_empty, idempotent_load
 
 @etl_step(name="Load Users", stage="extract")
 def load_users(path): return open(path).readlines()
@@ -872,7 +896,7 @@ def fetch_api(endpoint): ...  # 相同 endpoint 只呼叫一次
 | `@non_empty_return` | 回傳值不得為空容器或 `None` |
 
 ```python
-from hyper_framework import not_none, validate_args, validate_return, ensure_type, clamp_return, non_empty_return
+from hyper_framework.decorators import not_none, validate_args, validate_return, ensure_type, clamp_return, non_empty_return
 
 @not_none("user_id", "payload")
 def create_record(user_id, payload): ...
@@ -909,7 +933,7 @@ def get_names(): return []  # 拋 ValueError
 | `@run_after(delay_ms, scheduler)` | 延遲 *delay_ms* 毫秒後在主執行緒執行（預設用 `widget.after`）|
 
 ```python
-from hyper_framework import require_main_thread, debounce, gui_error_handler
+from hyper_framework.decorators import require_main_thread, debounce, gui_error_handler
 
 @require_main_thread
 def update_label(text):
@@ -937,7 +961,7 @@ def on_button_click():
 | `@rate_limit(calls, period)` | 限制 *period* 秒內最多 *calls* 次；超限拋 `RuntimeError` |
 
 ```python
-from hyper_framework import emit_metric, watchdog_ping, health_check, alert_on_failure, rate_limit
+from hyper_framework.decorators import emit_metric, watchdog_ping, health_check, alert_on_failure, rate_limit
 
 heartbeat: dict = {}
 
@@ -971,7 +995,7 @@ def send_email(): ...   # 每分鐘最多 10 次
 | `@grad_check` | 梯度傳播後警告 NaN / Inf（需 `self.parameters()`，PyTorch-style）|
 
 ```python
-from hyper_framework import training_step, log_epoch, inference_only, cache_predictions
+from hyper_framework.decorators import training_step, log_epoch, inference_only, cache_predictions
 
 class Trainer:
     @training_step
@@ -1011,7 +1035,7 @@ class Model:
 | `@enforce_srp` | 若類別方法數超過上限（預設 10）發出 `UserWarning` |
 
 ```python
-from hyper_framework import (
+from hyper_framework.decorators import (
     single_responsibility, layer, interface_method,
     sealed, require_override, enforce_srp, no_side_effects,
 )
@@ -1043,10 +1067,10 @@ def pure_add(a, b): return a + b
 
 ## `helpers.exceptions` — 自訂例外
 
-所有例外可直接從頂層匯入：
+所有例外可從 `hyper_framework.exceptions` 匯入：
 
 ```python
-from hyper_framework import WrongOptionException, ValidationError, DataLoadError, ...
+from hyper_framework.exceptions import WrongOptionException, ValidationError, DataLoadError, ...
 ```
 
 ---
@@ -1061,7 +1085,7 @@ from hyper_framework import WrongOptionException, ValidationError, DataLoadError
 | `RepeatedInitializationError()` | 物件被重複初始化 |
 
 ```python
-from hyper_framework import (
+from hyper_framework.exceptions import (
     WrongOptionException, WrongImplementationException,
     UnhandledConditionError, RepeatedInitializationError,
 )
@@ -1205,7 +1229,7 @@ raise RepeatedInitializationError()
 | `ModelArchitectureError(reason)` | 模型架構定義有誤 |
 
 ```python
-from hyper_framework import (
+from hyper_framework.exceptions import (
     # lifecycle
     NotInitializedError, AlreadyDisposedError, TeardownError,
     # options
@@ -1248,6 +1272,22 @@ from hyper_framework import (
 | XML | `xml_unittest_module` | `compare_xml_files` | — |
 | INI | `ini_unittest_module` | `compare_ini_files` | — |
 | TOML | `toml_unittest_module` | `compare_toml_files` | — (Python 3.11+) |
+
+### Import 方式
+
+三種 import 方式均支援（以 TOML 為例，其餘格式同理）：
+
+```python
+# 方式 1：從子模組精準匯入
+from hyper_framework.file_compare.toml_unittest_module import compare_toml_files
+
+# 方式 2：子模組別名
+import hyper_framework.file_compare.toml_unittest_module as m
+m.compare_toml_files(...)
+
+# 方式 3：從 file_compare 頂層平舖匯入（推薦）
+from hyper_framework.file_compare import compare_toml_files
+```
 
 ### 安裝
 
@@ -1322,7 +1362,7 @@ pip install isd-python-framework[all]
 #### Excel
 
 ```python
-from hyper_framework.file_compare.excel_unittest_module import compare_excel_sheets
+from hyper_framework.file_compare import compare_excel_sheets
 
 compare_excel_sheets({
     "target_path": "output.xlsx",
@@ -1352,7 +1392,7 @@ compare_excel_sheets({
 #### CSV
 
 ```python
-from hyper_framework.file_compare.csv_unittest_module import compare_csv_files
+from hyper_framework.file_compare import compare_csv_files
 
 compare_csv_files({
     "target_path": "output.csv",
@@ -1367,7 +1407,7 @@ compare_csv_files({
 #### JSON
 
 ```python
-from hyper_framework.file_compare.json_unittest_module import compare_json_files
+from hyper_framework.file_compare import compare_json_files
 
 compare_json_files({
     "target_path": "output.json",
@@ -1379,7 +1419,7 @@ compare_json_files({
 #### JSONL
 
 ```python
-from hyper_framework.file_compare.jsonl_unittest_module import compare_jsonl_files
+from hyper_framework.file_compare import compare_jsonl_files
 
 compare_jsonl_files({
     "target_path": "output.jsonl",
@@ -1391,7 +1431,7 @@ compare_jsonl_files({
 #### TXT
 
 ```python
-from hyper_framework.file_compare.txt_unittest_module import compare_txt_files
+from hyper_framework.file_compare import compare_txt_files
 
 compare_txt_files({
     "target_path": "output.txt",
@@ -1406,7 +1446,7 @@ compare_txt_files({
 #### YAML
 
 ```python
-from hyper_framework.file_compare.yaml_unittest_module import compare_yaml_files
+from hyper_framework.file_compare import compare_yaml_files
 
 compare_yaml_files({
     "target_path": "output.yaml",
@@ -1418,7 +1458,7 @@ compare_yaml_files({
 #### XML
 
 ```python
-from hyper_framework.file_compare.xml_unittest_module import compare_xml_files
+from hyper_framework.file_compare import compare_xml_files
 
 compare_xml_files({
     "target_path": "output.xml",
@@ -1431,7 +1471,7 @@ compare_xml_files({
 #### INI
 
 ```python
-from hyper_framework.file_compare.ini_unittest_module import compare_ini_files
+from hyper_framework.file_compare import compare_ini_files
 
 compare_ini_files({
     "target_path": "output.ini",
@@ -1446,7 +1486,7 @@ compare_ini_files({
 #### TOML
 
 ```python
-from hyper_framework.file_compare.toml_unittest_module import compare_toml_files
+from hyper_framework.file_compare import compare_toml_files
 
 compare_toml_files({
     "target_path": "output.toml",

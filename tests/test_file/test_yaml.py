@@ -9,7 +9,7 @@ YAML 結構比對測試 — sample demo
     python tests/test_file/test_yaml.py
 """
 from pathlib import Path
-from hyper_framework.file_compare.yaml_unittest_module import compare_yaml_files
+from hyper_framework.file_compare import compare_yaml_files
 
 BASE = Path(__file__).parent / "base"
 

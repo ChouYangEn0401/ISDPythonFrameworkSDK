@@ -1,5 +1,5 @@
 """XML 比對測試 — 使用 compare_xml_files()"""
-from hyper_framework.file_compare.xml_unittest_module import compare_xml_files
+from hyper_framework.file_compare import compare_xml_files
 
 
 class TestXML:

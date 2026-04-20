@@ -1,5 +1,5 @@
 """JSON 比對測試 — 使用 compare_json_files()"""
-from hyper_framework.file_compare.json_unittest_module import compare_json_files
+from hyper_framework.file_compare import compare_json_files
 
 
 class TestJSON:

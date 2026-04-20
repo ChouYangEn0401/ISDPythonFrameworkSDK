@@ -1,4 +1,4 @@
-from hyper_framework import SingletonMetaclass
+from hyper_framework.interface import SingletonMetaclass
 
 class MyManager(metaclass=SingletonMetaclass):
     def _initialize_manager(self):

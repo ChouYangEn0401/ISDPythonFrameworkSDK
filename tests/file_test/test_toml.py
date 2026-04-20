@@ -1,5 +1,5 @@
 """TOML 比對測試 — 使用 compare_toml_files()"""
-from hyper_framework.file_compare.toml_unittest_module import compare_toml_files
+from hyper_framework.file_compare import compare_toml_files
 
 
 class TestTOML:
