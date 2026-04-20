@@ -1,0 +1,1 @@
+from .run_txt_structure_test import compare_txt_files

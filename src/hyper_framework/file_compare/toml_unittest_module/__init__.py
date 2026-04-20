@@ -1,0 +1,1 @@
+from .run_toml_structure_test import compare_toml_files

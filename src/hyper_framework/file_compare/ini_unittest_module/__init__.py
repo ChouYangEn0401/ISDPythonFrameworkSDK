@@ -1,0 +1,1 @@
+from .run_ini_structure_test import compare_ini_files

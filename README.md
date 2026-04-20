@@ -33,7 +33,17 @@ pip install -e .
 pip install -e ".[excel]"
 ```
 
-### 四、完整安裝（含所有 optional extras）
+### 四、含 YAML 測試工具
+```bash
+pip install -e ".[yaml]"
+```
+
+### 五、含全部檔案測試工具（Excel + YAML）
+```bash
+pip install -e ".[filetest]"
+```
+
+### 六、完整安裝（含所有 optional extras）
 ```bash
 pip install -e ".[all]"
 ```
@@ -74,7 +84,18 @@ hyper_framework/
 │       ├── gui.py                     # GUI 操作例外
 │       ├── monitoring.py              # 監察 / 觀測例外
 │       └── ai_training.py             # AI / ML 訓練例外
-└── unitest_structure/         # 測試工具 (需 [excel] extras)
+└── file_compare/              # 多格式檔案比對工具
+    ├── _shared.py                     # 共用色彩常數 & 比對工具函式
+    ├── html_report.py                 # 產生 HTML 比對報告
+    ├── csv_unittest_module/           # CSV 比對
+    ├── excel_unittest_module/         # Excel 比對（需 [excel] extras）
+    ├── ini_unittest_module/           # INI 比對
+    ├── json_unittest_module/          # JSON 比對
+    ├── jsonl_unittest_module/         # JSONL 比對
+    ├── toml_unittest_module/          # TOML 比對（Python 3.11+）
+    ├── txt_unittest_module/           # TXT 純文字比對
+    ├── xml_unittest_module/           # XML 比對
+    └── yaml_unittest_module/          # YAML 比對（需 [yaml] extras）
 ```
 
 ---
@@ -1210,12 +1231,98 @@ from hyper_framework import (
 
 ---
 
-## `unitest_structure` — 測試工具（需 `[excel]` extras）
+## `file_compare` — 多格式檔案比對工具
 
-### Excel 結構核對
+快速比對「待測輸出」與「預期標準」，支援 9 種檔案格式，共享統一的 Config 介面與 **Masking** 機制。
+
+### 支援格式
+
+| 格式 | 子模組 | 函式 | 額外套件 |
+|---|---|---|---|
+| Excel (.xlsx) | `excel_unittest_module` | `compare_excel_sheets` | `openpyxl` |
+| CSV | `csv_unittest_module` | `compare_csv_files` | — |
+| JSON | `json_unittest_module` | `compare_json_files` | — |
+| JSONL | `jsonl_unittest_module` | `compare_jsonl_files` | — |
+| TXT | `txt_unittest_module` | `compare_txt_files` | — |
+| YAML | `yaml_unittest_module` | `compare_yaml_files` | `pyyaml` |
+| XML | `xml_unittest_module` | `compare_xml_files` | — |
+| INI | `ini_unittest_module` | `compare_ini_files` | — |
+| TOML | `toml_unittest_module` | `compare_toml_files` | — (Python 3.11+) |
+
+### 安裝
+
+```bash
+# Excel 工具
+pip install isd-python-framework[excel]
+
+# YAML 工具
+pip install isd-python-framework[yaml]
+
+# 全部檔案測試工具（Excel + YAML；CSV/JSON/TXT/XML/INI/TOML 為內建無需額外安裝）
+pip install isd-python-framework[filetest]
+
+# 全部（含 dev + filetest）
+pip install isd-python-framework[all]
+```
+
+---
+
+### Masking 機制
+
+所有模組支援 `mask` 參數，可精準指定要比對或跳過的範圍。
+
+#### 行式格式（Excel / CSV / TXT / JSONL）
 
 ```python
-from hyper_framework.unitest_structure.excel_unittest_module import compare_excel_sheets
+"mask": {
+    "include_rows": [1, 2, 3],   # 只比對這些行（1-indexed）
+    "exclude_rows": [5, 10],     # 跳過這些行
+    # ----- 以下僅 Excel 和 CSV 支援 -----
+    "include_cols": ["A", "B"],  # 只比對這些欄（Excel 用字母；CSV 用 0-indexed int）
+    "exclude_cols": ["C"],       # 跳過這些欄
+    "exclude_cells": ["A1"],     # 跳過特定儲存格（僅 Excel）
+}
+```
+
+> `include_rows` 和 `exclude_rows` 可同時使用：先取 include 範圍，再減去 exclude。
+
+#### 樹狀格式（JSON / YAML / TOML）
+
+```python
+"mask": {
+    "include_paths": ["$.data", "$.config"],      # 只比對這些路徑
+    "exclude_paths": ["$.metadata.timestamp"],     # 跳過這些路徑
+}
+```
+
+路徑格式：`$` 為根，用 `.` 分隔 key，用 `[i]` 索引 list 元素。
+
+#### XML
+
+```python
+"mask": {
+    "exclude_tags": ["timestamp", "generated"],    # 跳過含有這些 tag 的元素
+}
+```
+
+#### INI
+
+```python
+"mask": {
+    "include_sections": ["database", "server"],    # 只比對這些區段
+    "exclude_sections": ["debug"],                 # 跳過這些區段
+    "exclude_keys": {"server": ["timestamp"]},     # 跳過特定區段中的特定 key
+}
+```
+
+---
+
+### 快速範例
+
+#### Excel
+
+```python
+from hyper_framework.file_compare.excel_unittest_module import compare_excel_sheets
 
 compare_excel_sheets({
     "target_path": "output.xlsx",
@@ -1224,9 +1331,127 @@ compare_excel_sheets({
         {
             "target_sheet": "Result",
             "bench_sheet":  "Result",
-            "checks": [],
-        }
+            "checks": ["content", "color", "type", "freeze", "hidden"],
+            "mask": {
+                "exclude_rows": [1],         # 跳過標題行
+                "exclude_cols": ["A"],        # 跳過 A 欄
+                "exclude_cells": ["B2"],      # 跳過 B2 儲存格
+            },
+            # 向下相容：skip 可與 mask 並用
+            "skip": {
+                "correct": ["C3"],            # 預期改動的儲存格
+                "false":   ["D4"],            # 已知錯誤的儲存格
+            },
+        },
     ],
+})
+```
+
+支援的 `checks`：`content`、`color`、`type`、`freeze`、`hidden`。
+
+#### CSV
+
+```python
+from hyper_framework.file_compare.csv_unittest_module import compare_csv_files
+
+compare_csv_files({
+    "target_path": "output.csv",
+    "bench_path":  "expected.csv",
+    "encoding":    "utf-8",       # 選填，預設 utf-8
+    "delimiter":   ",",           # 選填，預設 ","
+    "checks":      ["content", "row_count", "column_count", "header"],
+    "mask":        {"exclude_rows": [1]},
+})
+```
+
+#### JSON
+
+```python
+from hyper_framework.file_compare.json_unittest_module import compare_json_files
+
+compare_json_files({
+    "target_path": "output.json",
+    "bench_path":  "expected.json",
+    "mask": {"exclude_paths": ["$.metadata.timestamp"]},
+})
+```
+
+#### JSONL
+
+```python
+from hyper_framework.file_compare.jsonl_unittest_module import compare_jsonl_files
+
+compare_jsonl_files({
+    "target_path": "output.jsonl",
+    "bench_path":  "expected.jsonl",
+    "mask": {"include_rows": [1, 3, 5]},
+})
+```
+
+#### TXT
+
+```python
+from hyper_framework.file_compare.txt_unittest_module import compare_txt_files
+
+compare_txt_files({
+    "target_path": "output.txt",
+    "bench_path":  "expected.txt",
+    "strip":  True,                        # 選填，去除首尾空白再比對
+    "case":   "upper",                     # 選填: "upper" | "lower"，比對前統一大小寫
+    "checks": ["content", "line_count"],
+    "mask":   {"exclude_rows": [1, 2]},
+})
+```
+
+#### YAML
+
+```python
+from hyper_framework.file_compare.yaml_unittest_module import compare_yaml_files
+
+compare_yaml_files({
+    "target_path": "output.yaml",
+    "bench_path":  "expected.yaml",
+    "mask": {"exclude_paths": ["$.generated_at"]},
+})
+```
+
+#### XML
+
+```python
+from hyper_framework.file_compare.xml_unittest_module import compare_xml_files
+
+compare_xml_files({
+    "target_path": "output.xml",
+    "bench_path":  "expected.xml",
+    "checks": ["tag", "text", "attrib", "children_count"],
+    "mask":   {"exclude_tags": ["timestamp"]},
+})
+```
+
+#### INI
+
+```python
+from hyper_framework.file_compare.ini_unittest_module import compare_ini_files
+
+compare_ini_files({
+    "target_path": "output.ini",
+    "bench_path":  "expected.ini",
+    "mask": {
+        "exclude_sections": ["debug"],
+        "exclude_keys":     {"server": ["timestamp"]},
+    },
+})
+```
+
+#### TOML
+
+```python
+from hyper_framework.file_compare.toml_unittest_module import compare_toml_files
+
+compare_toml_files({
+    "target_path": "output.toml",
+    "bench_path":  "expected.toml",
+    "mask": {"exclude_paths": ["$.metadata.generated_at"]},
 })
 ```
 
