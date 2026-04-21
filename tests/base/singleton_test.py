@@ -1,4 +1,4 @@
-from hyper_framework.base import SingletonMetaclass
+from isd_py_framework_sdk.interface import SingletonMetaclass
 
 class MyManager(metaclass=SingletonMetaclass):
     def _initialize_manager(self):

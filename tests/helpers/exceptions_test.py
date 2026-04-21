@@ -1,13 +1,13 @@
 """
 Quick smoke-test for helpers/exceptions
-Run: python src/hyper_framework/helpers/exceptions/_test.py
+Run: python src/isd_py_framework_sdk/helpers/exceptions/_test.py
 """
 
 import sys
 
 sys.path.insert(0, "src")
 
-from hyper_framework.helpers.exceptions import (
+from isd_py_framework_sdk.exceptions import (
     # legacy (backward-compat)
     WrongOptionException,
     WrongImplementationException,

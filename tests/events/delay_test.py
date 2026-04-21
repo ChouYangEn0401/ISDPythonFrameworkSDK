@@ -1,4 +1,4 @@
-from hyper_framework.events import DelayEventBusManager, IDelayEventBase
+from isd_py_framework_sdk.events import DelayEventBusManager, IDelayEventBase
 
 class OnSystemReady(IDelayEventBase): pass
 

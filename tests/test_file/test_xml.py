@@ -1,7 +1,7 @@
 """
 XML 結構比對測試 — sample demo
 ================================
-使用 hyper_framework 的 compare_xml_files，
+使用 isd_py_framework_sdk 的 compare_xml_files，
 以 tests/test_file/base/sample.xml 作為待測檔，
     tests/test_file/base/[BU] sample.xml 作為標準備份。
 
@@ -9,7 +9,7 @@ XML 結構比對測試 — sample demo
     python tests/test_file/test_xml.py
 """
 from pathlib import Path
-from hyper_framework.file_compare import compare_xml_files
+from isd_py_framework_sdk.file_compare import compare_xml_files
 
 BASE = Path(__file__).parent / "base"
 

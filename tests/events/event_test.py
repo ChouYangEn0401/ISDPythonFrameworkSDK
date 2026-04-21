@@ -1,4 +1,4 @@
-from hyper_framework.events import SingletonEventManager, IEventBase, IParsEventBase
+from isd_py_framework_sdk.events import SingletonEventManager, IEventBase, IParsEventBase
 from dataclasses import dataclass
 
 

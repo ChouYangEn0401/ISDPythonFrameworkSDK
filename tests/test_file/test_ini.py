@@ -1,7 +1,7 @@
 """
 INI 結構比對測試 — sample demo
 ================================
-使用 hyper_framework 的 compare_ini_files，
+使用 isd_py_framework_sdk 的 compare_ini_files，
 以 tests/test_file/base/sample.ini 作為待測檔，
     tests/test_file/base/[BU] sample.ini 作為標準備份。
 
@@ -9,7 +9,7 @@ INI 結構比對測試 — sample demo
     python tests/test_file/test_ini.py
 """
 from pathlib import Path
-from hyper_framework.file_compare import compare_ini_files
+from isd_py_framework_sdk.file_compare import compare_ini_files
 
 BASE = Path(__file__).parent / "base"
 

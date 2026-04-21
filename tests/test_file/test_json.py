@@ -1,7 +1,7 @@
 """
 JSON 結構比對測試 — sample demo
 =================================
-使用 hyper_framework 的 compare_json_files，
+使用 isd_py_framework_sdk 的 compare_json_files，
 以 tests/test_file/base/sample.json 作為待測檔，
     tests/test_file/base/[BU] sample.json 作為標準備份。
 
@@ -9,7 +9,7 @@ JSON 結構比對測試 — sample demo
     python tests/test_file/test_json.py
 """
 from pathlib import Path
-from hyper_framework.file_compare import compare_json_files
+from isd_py_framework_sdk.file_compare import compare_json_files
 
 BASE = Path(__file__).parent / "base"
 

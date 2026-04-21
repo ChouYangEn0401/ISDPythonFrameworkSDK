@@ -1,6 +1,6 @@
 """
 Quick smoke-test for helpers/assertions
-Run: python src/hyper_framework/helpers/assertions/_test.py
+Run: python src/isd_py_framework_sdk/helpers/assertions/_test.py
 """
 
 import sys
@@ -8,7 +8,7 @@ import traceback
 
 sys.path.insert(0, "src")
 
-from hyper_framework.helpers.assertions import (
+from isd_py_framework_sdk.assertions import (
     # type
     assert__is_str,
     assert__is_int,

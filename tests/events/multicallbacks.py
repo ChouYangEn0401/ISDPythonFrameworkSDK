@@ -1,4 +1,4 @@
-from hyper_framework.events import MulticastCallback
+from isd_py_framework_sdk.events import MulticastCallback
 from typing import Callable, List
 
 result_list = []

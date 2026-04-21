@@ -1,7 +1,7 @@
 """
 TOML 結構比對測試 — sample demo
 ==================================
-使用 hyper_framework 的 compare_toml_files（需 Python 3.11+）。
+使用 isd_py_framework_sdk 的 compare_toml_files（需 Python 3.11+）。
 以 tests/test_file/base/sample.toml 作為待測檔，
     tests/test_file/base/[BU] sample.toml 作為標準備份。
 
@@ -9,7 +9,7 @@ TOML 結構比對測試 — sample demo
     python tests/test_file/test_toml.py
 """
 from pathlib import Path
-from hyper_framework.file_compare import compare_toml_files
+from isd_py_framework_sdk.file_compare import compare_toml_files
 
 BASE = Path(__file__).parent / "base"
 

@@ -1,5 +1,5 @@
 from pathlib import Path
-from hyper_framework.message_logger import SingletonSystemLogger, FileAdapter, DarkThemeTerminalAdapter
+from isd_py_framework_sdk.message_logger import SingletonSystemLogger, FileAdapter, DarkThemeTerminalAdapter
 
 logger = SingletonSystemLogger()
 logger.clear_adapters()

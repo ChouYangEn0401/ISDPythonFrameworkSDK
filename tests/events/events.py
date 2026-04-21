@@ -1,4 +1,4 @@
-from hyper_framework.events import IEventBase, IParsEventBase
+from isd_py_framework_sdk.events import IEventBase, IParsEventBase
 from dataclasses import dataclass
 
 # 無參數事件

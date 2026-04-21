@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "isd-python-framework"
+name = "isd-py-framework-sdk"
 dynamic = ["version"]
 description = "ISD Python Framework — The foundational base framework for ISD module development"
 readme = "README.md"
@@ -22,7 +22,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.dynamic]
-version = { attr = "hyper_framework._version.__version__" }
+version = { attr = "isd_py_framework_sdk._version.__version__" }
 
 [project.optional-dependencies]
 # Optional extras grouped by real subpackage names. Default install is the
@@ -69,5 +69,5 @@ all = [
 ]
 
 [project.scripts]
-# isd-python-framework -V / --version
-isd-python-framework = "hyper_framework.cli:main"
+# isd-py-framework-sdk -V / --version
+isd-py-framework-sdk = "isd_py_framework_sdk.cli:main"

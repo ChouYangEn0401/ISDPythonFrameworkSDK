@@ -1,6 +1,6 @@
 import argparse
 import tkinter as tk
-from hyper_framework.message_logger import (
+from isd_py_framework_sdk.message_logger import (
     SingletonSystemLogger,
     DarkThemeTkinterAdapter,
     LightThemeTkinterAdapter,

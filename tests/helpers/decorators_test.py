@@ -1,6 +1,6 @@
 """
 Quick smoke-test for helpers/decorators
-Run: python src/hyper_framework/helpers/decorators/_test.py
+Run: python src/isd_py_framework_sdk/helpers/decorators/_test.py
 """
 
 import sys
@@ -10,7 +10,7 @@ import warnings
 
 sys.path.insert(0, "src")
 
-from hyper_framework.helpers.decorators import (
+from isd_py_framework_sdk.decorators import (
     # profiling
     function_timer, timed_and_conditional_return, log_call, count_calls, profile_memory,
     # lifecycle

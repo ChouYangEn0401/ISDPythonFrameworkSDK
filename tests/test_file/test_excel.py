@@ -1,7 +1,7 @@
 """
 Excel 結構比對測試 — sample demo
 =================================
-使用 hyper_framework 的 compare_excel_sheets，
+使用 isd_py_framework_sdk 的 compare_excel_sheets，
 以 tests/test_file/base/sample.xlsx 作為待測檔，
     tests/test_file/base/[BU] sample.xlsx 作為標準備份。
 
@@ -15,7 +15,7 @@ import pytest
 pytest.importorskip("openpyxl")
 pytest.importorskip("pandas")
 
-from hyper_framework.file_compare import compare_excel_sheets
+from isd_py_framework_sdk.file_compare import compare_excel_sheets
 
 BASE = Path(__file__).parent / "base"
 

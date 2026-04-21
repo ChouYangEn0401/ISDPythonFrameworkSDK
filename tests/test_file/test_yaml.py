@@ -1,7 +1,7 @@
 """
 YAML 結構比對測試 — sample demo
 ==================================
-使用 hyper_framework 的 compare_yaml_files（需安裝 pyyaml）。
+使用 isd_py_framework_sdk 的 compare_yaml_files（需安裝 pyyaml）。
 以 tests/test_file/base/sample.yaml 作為待測檔，
     tests/test_file/base/[BU] sample.yaml 作為標準備份。
 
@@ -14,7 +14,7 @@ import pytest
 # Skip if YAML backend is not installed
 pytest.importorskip("yaml")
 
-from hyper_framework.file_compare import compare_yaml_files
+from isd_py_framework_sdk.file_compare import compare_yaml_files
 
 BASE = Path(__file__).parent / "base"
 

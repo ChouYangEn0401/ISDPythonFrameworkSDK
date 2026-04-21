@@ -1,7 +1,7 @@
 """
 CSV 結構比對測試 — sample demo
 ================================
-使用 hyper_framework 的 compare_csv_files，
+使用 isd_py_framework_sdk 的 compare_csv_files，
 以 tests/test_file/base/sample.csv 作為待測檔，
     tests/test_file/base/[BU] sample.csv 作為標準備份。
 
@@ -9,7 +9,7 @@ CSV 結構比對測試 — sample demo
     python tests/test_file/test_csv.py
 """
 from pathlib import Path
-from hyper_framework.file_compare import compare_csv_files
+from isd_py_framework_sdk.file_compare import compare_csv_files
 
 BASE = Path(__file__).parent / "base"
 
