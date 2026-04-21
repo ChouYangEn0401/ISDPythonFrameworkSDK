@@ -14,7 +14,7 @@ from isd_py_framework_sdk.decorators import (
     # profiling
     function_timer, timed_and_conditional_return, log_call, count_calls, profile_memory,
     # lifecycle
-    deprecated, battered, experimental, removed_in, since,
+    old_method, deprecated, battered, experimental, removed_in, since,
     # control-flow
     retry, once, suppress_exceptions, throttle, timeout,
     # concurrency
@@ -111,6 +111,14 @@ expect_pass("profile_memory: runs without error", lambda: _alloc())
 
 # ──────────────────────────────────────────────────────────────────────────────
 print("\n── Lifecycle ────────────────────────────────────────────────────────────")
+
+@old_method("use new_func")
+def _old(): return 1
+
+with warnings.catch_warnings(record=True) as w:
+    warnings.simplefilter("always")
+    _old()
+    chk("deprecated: DeprecationWarning issued", any(issubclass(x.category, DeprecationWarning) for x in w))
 
 @deprecated("use new_func")
 def _old(): return 1

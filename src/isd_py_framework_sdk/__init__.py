@@ -23,6 +23,7 @@ from .helpers.decorators import (
     # legacy / profiling
     function_timer,
     timed_and_conditional_return,
+    old_method,
     deprecated,
     battered,
     # profiling (new)
@@ -234,6 +235,7 @@ __all__ = [
     # decorators — timing / legacy
     "function_timer",
     "timed_and_conditional_return",
+    "old_method",
     "deprecated",
     "battered",
     # decorators — profiling

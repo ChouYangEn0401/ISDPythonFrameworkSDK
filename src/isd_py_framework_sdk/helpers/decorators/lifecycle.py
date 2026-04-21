@@ -11,6 +11,33 @@ import functools
 import warnings
 
 
+def old_method(reason: str = ""):
+    """
+    Mark a function as deprecated.
+    Issues a ``OldWarning`` on every call.
+
+    :param reason: Explanation or replacement suggestion.
+
+    e.g.::
+
+        @old_method("Use `new_func` instead.")
+        def old_func(x):
+            return x + 1
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            msg = f"Function {func.__name__!r} is old method, and may be removed/merged in future versions."
+            if reason:
+                msg += f" {reason}"
+            warnings.warn(msg, category=OldWarning, stacklevel=2)
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
 def deprecated(reason: str = ""):
     """
     Mark a function as deprecated.

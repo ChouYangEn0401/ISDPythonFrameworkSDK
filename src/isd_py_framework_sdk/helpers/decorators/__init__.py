@@ -26,6 +26,7 @@ from .profiling import (
 
 # ── Lifecycle (API versioning signals) ───────────────────────────────────
 from .lifecycle import (
+    old_method,
     deprecated,
     battered,
     experimental,
@@ -110,6 +111,7 @@ __all__ = [
     # legacy / profiling
     "function_timer",
     "timed_and_conditional_return",
+    "old_method",
     "deprecated",
     "battered",
     # profiling (new)
