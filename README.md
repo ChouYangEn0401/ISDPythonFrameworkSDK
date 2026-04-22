@@ -97,6 +97,14 @@ isd_py_framework_sdk/
 │   ├── txt_unittest_module/           # TXT 純文字比對
 │   ├── xml_unittest_module/           # XML 比對
 │   └── yaml_unittest_module/          # YAML 比對（需 [yaml] extras）
+├── path_manager/              # 中心化路徑管理
+│   ├── interface.py                   # IPathManager（ABC）
+│   ├── singleton_path_manager.py      # SingletonPathManager（主實作）
+│   ├── _enums.py                      # PathMode enum
+│   ├── _waterfall.py                  # Waterfall fallback 鏈
+│   ├── _conflict.py                   # ConflictStrategy + 內建策略
+│   ├── _registry.py                   # PathEntry + PathRegistry（內部）
+│   └── _resolver.py                   # EnvironmentResolver（環境偵測）
 ├── interface.py               # 短路徑別名：SingletonMetaclass, IScalableWindowTester
 ├── events_bus.py              # 短路徑別名：事件系統（→ events/）
 ├── msg_logger.py              # 短路徑別名：日誌系統（→ message_logger/）
@@ -119,6 +127,7 @@ isd_py_framework_sdk/
 - `isd_py_framework_sdk.helpers.decorators` — 裝飾器工具
 - `isd_py_framework_sdk.helpers.exceptions` — 自訂例外
 - `isd_py_framework_sdk.file_compare` — 多格式檔案比對工具（`compare_*` 函式）
+- `isd_py_framework_sdk.path_manager` — 中心化路徑管理（`SingletonPathManager`, `PathMode`, `Waterfall`）
 
 備註：為了向下相容，套件仍提供便捷短檔（例如 `interface.py`, `events_bus.py`, `msg_logger.py` 等），但文件與範例會以真實 module 名稱為主，避免混淆。
 
@@ -1495,6 +1504,128 @@ compare_toml_files({
     "bench_path":  "expected.toml",
     "mask": {"exclude_paths": ["$.metadata.generated_at"]},
 })
+```
+
+---
+
+## `path_manager` — 中心化路徑管理
+
+消滅專案裡散落各處的 `../../data/...`、`os.path.join(Path(__file__).resolve().parent, ...)`、`os.path.join(os.getcwd(), ...)` 等。
+透過 `SingletonPathManager` 把所有常見路徑統一建立member並登記在一個地方、並提供暫時檔案註冊的機會；未來，任何模組、任何使用者只需用 **tag** 查詢，不再自己計算。
+
+### 設計重點
+
+| 功能 | 說明 |
+|------|------|
+| **Tag 登記制** | 每條路徑打上 `description`，三個月後也知道它的用途 |
+| **環境感知** | 自動偵測 dev / PyInstaller；路徑 API 一致，底層自動切換 |
+| **Waterfall** | 依序嘗試多個錨點，回傳第一個存在的路徑 |
+| **衝突策略** | 寫入前自動偵測衝突，套用 suffix / timestamp 策略 |
+| **可繼承接口** | 繼承 `IPathManager` 建立子專案專屬管理者 |
+
+### `PathMode` — 路徑模式
+
+| 值 | 語意 |
+|----|------|
+| `ABSOLUTE` | 完整 OS 絕對路徑 |
+| `PROJ_RELATIVE` | 相對於 `proj_root` |
+| `PROJ_ABSOLUTE` | 以 `proj_root` 為基底的絕對路徑 |
+| `EXE_RELATIVE` | 相對於 exe 所在目錄 |
+| `EXE_ABSOLUTE` | 以 exe 目錄為基底的絕對路徑 |
+| `EXE_INNER` | PyInstaller 打包內部（`sys._MEIPASS`） |
+| `SYSTEM_TEMP` | 系統暫存目錄 |
+| `CWD` | 呼叫時的當前工作目錄 |
+
+### `Waterfall` — fallback 鏈
+
+```python
+from isd_py_framework_sdk.path_manager import Waterfall, PathMode
+
+# 自訂 waterfall：EXE 內部 → exe 旁邊 → 專案根目錄
+wf = Waterfall(PathMode.EXE_INNER, PathMode.EXE_ABSOLUTE, PathMode.PROJ_ABSOLUTE)
+path = pm.get("config", wf)
+```
+
+| 內建 Waterfall | 步驟 | 適合場景 |
+|---------------|------|----------|
+| `Waterfall.EXE_PREFER_BUNDLED` | EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE | 打包後優先讀 bundle 資料 |
+| `Waterfall.DEV_STANDARD` | PROJ_ABSOLUTE → ABSOLUTE → CWD | 開發期間標準讀取 |
+| `Waterfall.EXE_WRITE_SAFE` | EXE_ABSOLUTE → SYSTEM_TEMP | 打包後寫入安全策略 |
+| `Waterfall.UNIVERSAL` | EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE → CWD → SYSTEM_TEMP | 最大相容 |
+
+### 快速試用
+
+```python
+from isd_py_framework_sdk.path_manager import (
+    SingletonPathManager, PathMode, Waterfall,
+    IncrementSuffixStrategy,
+)
+
+pm = SingletonPathManager()
+
+# 設定專案根目錄（只需在入口點呼叫一次）
+pm.set_proj_root(__file__, levels_up=1)   # 從此 __file__ 往上 1 層
+
+# 登記路徑（附說明，方便未來查閱）
+pm.register("data_in",   "data/inputs",    description="原始資料輸入目錄")
+pm.register("data_out",  "data/outputs",   description="輸出結果目錄")
+pm.register("error_log", "logs/error.log", description="執行期錯誤日誌")
+pm.register(
+    "bundled_db",
+    "assets/ref.db",
+    anchor=PathMode.EXE_INNER,            # PyInstaller 打包內嵌
+    description="打包內嵌參考資料庫",
+)
+
+# 從任何模組取得路徑（同一 singleton）
+pm = SingletonPathManager()
+
+path = pm.get("data_in")                          # → 絕對 Path
+rel  = pm.get("data_in",  PathMode.PROJ_RELATIVE) # → 相對 Path
+path = pm.get("config",   Waterfall.UNIVERSAL)    # → 第一個存在的 Path
+
+pm.exists("data_in")                              # → bool（不拋例外）
+pm.list_tags()                                    # → {tag: description}
+print(pm.info())                                  # 格式化診斷字串
+```
+
+### Waterfall — PyInstaller 打包情境
+
+```python
+# 打包後：先嘗試 exe 內部，再找 exe 旁邊的目錄，最後找專案根目錄
+path = pm.get("config_file", Waterfall.EXE_PREFER_BUNDLED)
+
+# 寫入時使用安全策略（先嘗試 exe 旁邊，退而求其次用系統暫存）
+write_path = pm.get("result_xlsx", Waterfall.EXE_WRITE_SAFE)
+```
+
+### 存檔衝突處理
+
+```python
+from isd_py_framework_sdk.path_manager import (
+    SingletonPathManager, IncrementSuffixStrategy, TimestampSuffixStrategy,
+)
+
+pm = SingletonPathManager()
+pm.register("report", "outputs/report.xlsx", description="週報")
+
+# 若目標已存在，自動加 _001 / _002 … suffix
+safe_path = pm.resolve_conflict("report")
+# [CONFLICT] 'outputs/report.xlsx' already exists → redirecting write to 'outputs/report_001.xlsx'
+
+# 或指定策略
+safe_path = pm.resolve_conflict("report", strategy=TimestampSuffixStrategy())
+# → outputs/report_20260422_153012.xlsx
+```
+
+### 自訂管理者（繼承 `IPathManager`）
+
+```python
+from isd_py_framework_sdk.path_manager import IPathManager
+
+class MyProjectPathManager(IPathManager, ...):
+    """子專案路徑管理者，與頂層 SingletonPathManager 共用接口。"""
+    ...
 ```
 
 ---
