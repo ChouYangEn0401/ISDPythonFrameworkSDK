@@ -6,6 +6,7 @@ Internal logic is kept stateless (pure static methods) so it can be
 called freely without instantiation.
 """
 
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -27,6 +28,13 @@ class EnvironmentResolver:
     When not running under PyInstaller, ``exe_side_root()`` uses
     ``sys.argv[0]`` (the entry-point script) as the heuristic.  This
     mirrors the path where the exe would sit in a real deployment.
+
+    User directories
+    ----------------
+    Resolved via ``platformdirs`` when installed, otherwise via
+    ``Path.home()``-based heuristics that work on Windows / macOS / Linux.
+    The *app_name* parameter (default ``"app"``) is used by ``platformdirs``
+    to scope the directory (e.g. ``~/.config/<app_name>``).
     """
 
     # ------------------------------------------------------------------ #
@@ -68,9 +76,6 @@ class EnvironmentResolver:
 
         - **PyInstaller**: ``Path(sys.executable).parent``
         - **Dev / plain Python**: ``Path(sys.argv[0]).parent``
-
-        This is the natural location for data files shipped next to the exe,
-        e.g. ``dist/MyApp/data/``.
         """
         if EnvironmentResolver.is_pyinstaller():
             return Path(sys.executable).resolve().parent
@@ -85,3 +90,113 @@ class EnvironmentResolver:
     def cwd() -> Path:
         """Current working directory at the moment of the call."""
         return Path.cwd().resolve()
+
+    @staticmethod
+    def script_dir() -> Path:
+        """
+        Directory of the top-level entry-point script (``sys.argv[0]``).
+
+        In PyInstaller mode this is the same as ``exe_side_root()``.
+        """
+        return Path(sys.argv[0]).resolve().parent
+
+    @staticmethod
+    def user_home() -> Path:
+        """User home directory (``Path.home()``)."""
+        return Path.home().resolve()
+
+    @staticmethod
+    def user_config(app_name: str = "app") -> Path:
+        """
+        User configuration directory for *app_name*.
+
+        Tries ``platformdirs.user_config_dir`` first; falls back to:
+        - Linux/macOS: ``~/.config/<app_name>``
+        - Windows:     ``%APPDATA%/<app_name>``
+        """
+        try:
+            import platformdirs
+            return Path(platformdirs.user_config_dir(app_name)).resolve()
+        except ImportError:
+            pass
+        if sys.platform == "win32":
+            base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+        else:
+            base = Path.home() / ".config"
+        return (base / app_name).resolve()
+
+    @staticmethod
+    def user_data(app_name: str = "app") -> Path:
+        """
+        User application data directory for *app_name*.
+
+        Tries ``platformdirs.user_data_dir`` first; falls back to:
+        - Linux:   ``~/.local/share/<app_name>``
+        - macOS:   ``~/Library/Application Support/<app_name>``
+        - Windows: ``%APPDATA%/<app_name>``
+        """
+        try:
+            import platformdirs
+            return Path(platformdirs.user_data_dir(app_name)).resolve()
+        except ImportError:
+            pass
+        if sys.platform == "win32":
+            base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+        elif sys.platform == "darwin":
+            base = Path.home() / "Library" / "Application Support"
+        else:
+            base = Path.home() / ".local" / "share"
+        return (base / app_name).resolve()
+
+    @staticmethod
+    def user_cache(app_name: str = "app") -> Path:
+        """
+        User cache directory for *app_name*.
+
+        Tries ``platformdirs.user_cache_dir`` first; falls back to:
+        - Linux:   ``~/.cache/<app_name>``
+        - macOS:   ``~/Library/Caches/<app_name>``
+        - Windows: ``%LOCALAPPDATA%/<app_name>/Cache``
+        """
+        try:
+            import platformdirs
+            return Path(platformdirs.user_cache_dir(app_name)).resolve()
+        except ImportError:
+            pass
+        if sys.platform == "win32":
+            local = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+            return (local / app_name / "Cache").resolve()
+        elif sys.platform == "darwin":
+            return (Path.home() / "Library" / "Caches" / app_name).resolve()
+        else:
+            return (Path.home() / ".cache" / app_name).resolve()
+
+    @staticmethod
+    def virtual_env() -> Path:
+        """
+        Root of the currently active virtual environment.
+
+        Reads the ``VIRTUAL_ENV`` environment variable set by
+        ``venv`` / ``virtualenv`` / ``conda activate``.
+
+        Raises
+        ------
+        RuntimeError
+            When no virtual environment is active.
+        """
+        venv = os.environ.get("VIRTUAL_ENV")
+        if not venv:
+            raise RuntimeError(
+                "PathMode.VIRTUAL_ENV is only available when a virtual "
+                "environment is active (VIRTUAL_ENV env-var is not set)."
+            )
+        return Path(venv).resolve()
+
+        """System temporary directory (platform-specific, e.g. ``/tmp`` or ``%TEMP%``)."""
+        return Path(tempfile.gettempdir()).resolve()
+
+    @staticmethod
+    def cwd() -> Path:
+        """Current working directory at the moment of the call."""
+        return Path.cwd().resolve()
+

@@ -1,20 +1,18 @@
 """
 IPathManager — abstract interface for path managers.
 
-Implement this interface to create project-specific path managers that
-can participate in larger multi-project or multi-process topologies.
-The reference implementation is ``SingletonPathManager``.
-
 Design contract
 ---------------
 * ``set_proj_root`` — configure the project-root anchor
-* ``register`` / ``unregister`` / ``has`` — manage the tag → path registry
-* ``get`` — resolve a tag to a concrete ``Path``; accepts either a
-  ``PathMode`` (single representation) or a ``Waterfall`` (fallback chain)
+* ``register(tag, path, anchor)`` — anchor is REQUIRED; declares where
+  the path lives so resolution is always unambiguous
+* ``get(tag)`` — resolve to absolute Path using registered anchor
+* ``get(tag, Waterfall)`` — cross-environment override via fallback chain
+* ``as_relative(tag, base)`` — re-express absolute path relative to base
+* ``get_with_trace`` — debugging: never raises, returns trace
 * ``exists`` — non-raising existence check
-* ``list_tags`` — introspect the registry (debugging / documentation)
-* ``resolve_conflict`` — compute a safe write path respecting a
-  ``ConflictStrategy`` (§7 reserved; skeleton)
+* ``list_tags`` / ``info`` — introspect the registry (debugging / documentation)
+* ``resolve_conflict`` — compute safe write path
 """
 
 from __future__ import annotations
@@ -24,7 +22,7 @@ from pathlib import Path
 from typing import Dict, Optional, Union
 
 from ._enums import PathMode
-from ._waterfall import Waterfall
+from ._waterfall import Waterfall, ResolveIntent, WaterfallTrace
 from ._conflict import ConflictStrategy
 
 
@@ -42,23 +40,7 @@ class IPathManager(ABC):
         *,
         levels_up: int = 0,
     ) -> None:
-        """
-        Set the project-root directory used for ``PROJ_*`` modes.
-
-        Parameters
-        ----------
-        path :
-            A directory path **or** a ``__file__`` value from any module.
-            If *path* points to a file, its parent directory is the
-            starting point.
-        levels_up :
-            How many parent levels to ascend after resolving *path*.
-
-            Example — this file lives at ``project/src/pkg/config.py``
-            and we want ``project/`` as the root::
-
-                pm.set_proj_root(__file__, levels_up=2)
-        """
+        """Set the project-root directory used for ``PROJ_*`` anchors."""
         ...
 
     # ------------------------------------------------------------------ #
@@ -102,15 +84,41 @@ class IPathManager(ABC):
         tag: str,
         waterfall: Optional[Waterfall] = None,
         *,
+        intent: ResolveIntent = ResolveIntent.READ,
     ) -> Path:
         """
+        Return the absolute path for *tag*.
+
+        ``get(tag)``
+            Resolves using the anchor declared at registration.
+
+        ``get(tag, Waterfall.XYZ)``
+            Cross-environment override: tries each PathMode in the
+            waterfall, returning the first satisfying *intent*.
         """
         ...
 
     @abstractmethod
-    def exists(
+    def as_relative(self, tag: str, base: PathMode) -> Path:
+        """
+        Re-express the resolved absolute path for *tag* as relative to
+        *base*'s anchor directory.
+
+        Use for display / logging.  Does NOT override the registration anchor.
+        Raises ``ValueError`` if the resolved path is not inside *base*'s dir.
+        """
+        ...
+
+    @abstractmethod
+    def get_with_trace(
         self,
         tag: str,
+        waterfall: Waterfall,
+        *,
+        intent: ResolveIntent = ResolveIntent.READ,
+    ) -> "tuple[Optional[Path], WaterfallTrace]":
+        """Return ``(path_or_None, trace)`` without raising on failure."""
+        ...
 
     @abstractmethod
     def exists(self, tag: str) -> bool:
@@ -146,23 +154,11 @@ class IPathManager(ABC):
         tag: str,
         *,
         strategy: Optional[ConflictStrategy] = None,
-        mode: PathMode = PathMode.ABSOLUTE,
     ) -> Path:
         """
-        Compute a safe write path for *tag*, applying *strategy* if the
-        resolved path already exists on disk.
-
-        If *strategy* is ``None``, the manager uses its configured default
-        (``IncrementSuffixStrategy`` out of the box).
-
-        This method does **not** perform any I/O — computing the path only.
-        Writing is the caller's responsibility.
-
-        Returns
-        -------
-        Path
-            The path the caller should write to (may differ from the
-            resolved path when a conflict was detected).
+        Return a safe write path for *tag*, applying *strategy* if the target
+        already exists.  Uses the manager's default strategy when *strategy*
+        is ``None`` (``IncrementSuffixStrategy`` out of the box).
         """
         ...
 

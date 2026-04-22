@@ -64,21 +64,46 @@ shared across threads.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Dict, Optional, Union
 
 from .interface import IPathManager
 from ._enums import PathMode
-from ._waterfall import Waterfall
+from ._waterfall import Waterfall, ResolveIntent, WaterfallTrace
 from ._conflict import ConflictStrategy, IncrementSuffixStrategy
 from ._registry import PathEntry, PathRegistry
 from ._resolver import EnvironmentResolver
-from src.isd_py_framework_sdk.base.Singleton import SingletonMetaclass
+from ._meta import SingletonABCMeta
 
 
-class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
+class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
     """
     Thread-safe singleton path manager.
+
+    Design contract
+    ---------------
+    * ``register(tag, rel_path, anchor)``
+        *anchor* is **required** — you must declare where this path lives
+        (``PathMode.PROJ_ABSOLUTE``, ``PathMode.USER_CONFIG``, etc.).
+        The stored *rel_path* is always relative to that anchor's base
+        directory, except when ``anchor=PathMode.ABSOLUTE`` (store as-is).
+
+    * ``get(tag)``
+        Returns the **absolute** path, resolved from the registered anchor.
+        No hidden re-anchoring — what you declared at registration is what
+        you get.
+
+    * ``get(tag, Waterfall.XYZ)``
+        Cross-environment override: tries each ``PathMode`` in the waterfall
+        in order (combining that mode's base directory with the stored
+        relative path), returning the first that satisfies *intent*.
+        Use this for PyInstaller / prod / dev fallback chains.
+
+    * ``as_relative(tag, base)``
+        Re-expresses the already-resolved absolute path as relative to
+        *base*'s directory — for display, logging, or relative imports.
+        Does NOT override the registration anchor.
     """
 
     # ------------------------------------------------------------------ #
@@ -104,22 +129,12 @@ class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
         levels_up: int = 0,
     ) -> None:
         """
-        Set the project-root directory used for ``PROJ_*`` path modes.
+        Set the project-root directory used for ``PROJ_*`` anchors.
 
-        Parameters
-        ----------
-        path :
-            A directory path **or** a ``__file__`` value from any module.
-            If *path* points to a file, its parent directory is used as
-            the starting point.
-        levels_up :
-            How many parent levels to ascend from the resolved starting
-            point.
+        Pass a ``__file__`` value and use *levels_up* to ascend to the
+        actual project root::
 
-            Example — caller file is at ``project/src/pkg/config.py``
-            and the desired root is ``project/``::
-
-                pm.set_proj_root(__file__, levels_up=2)
+            pm.set_proj_root(__file__, levels_up=2)   # from src/pkg/main.py → project/
         """
         root = Path(path).resolve()
         if root.is_file():
@@ -135,6 +150,9 @@ class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
     def set_app_name(self, name: str) -> None:
         """
         Set the application name used when resolving ``USER_*`` anchors.
+
+        Affects ``USER_CONFIG``, ``USER_DATA``, and ``USER_CACHE`` directory
+        names (e.g. ``~/.config/<name>``).  Defaults to ``"app"``.
         """
         self._app_name = name
 
@@ -198,14 +216,70 @@ class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
         self,
         tag: str,
         waterfall: Optional[Waterfall] = None,
+        *,
+        intent: ResolveIntent = ResolveIntent.READ,
     ) -> Path:
+        """
+        Return the absolute path for *tag*.
+
+        ``get(tag)``
+            Resolves using the anchor declared at registration.
+            Always returns an absolute ``Path``.
+
+        ``get(tag, Waterfall.XYZ)``
+            Tries each mode in the waterfall in order (combining that
+            mode's base dir with the stored relative path).  Returns the
+            first path that satisfies *intent*:
+
+            * ``ResolveIntent.READ``  — the path must exist on disk
+            * ``ResolveIntent.WRITE`` — the path's *parent* must exist
+              and be writable (the file itself need not exist yet)
+
+            Raises ``FileNotFoundError`` if no step succeeds.
+        """
         entry = self._registry.get(tag)
         if waterfall is not None:
             return self._resolve_waterfall(entry, waterfall, intent=intent)
         return self._to_absolute(entry)
 
+    def as_relative(self, tag: str, base: PathMode) -> Path:
+        """
+        Re-express the resolved absolute path for *tag* as relative to
+        *base*'s anchor directory.
+
+        Use this for display, logging, or when you need a path relative
+        to a known root.  Does **not** override the registered anchor.
+
+        Raises ``ValueError`` if the resolved path is not inside *base*'s
+        directory.
+        """
+        absolute = self._to_absolute(self._registry.get(tag))
+        base_dir = self._anchor_dir(base)
+        try:
+            return absolute.relative_to(base_dir)
+        except ValueError:
+            raise ValueError(
+                f"Tag '{tag}': resolved path '{absolute}' is not inside "
+                f"{base.name} directory '{base_dir}'."
+            )
+
+    def get_with_trace(
         self,
         tag: str,
+        waterfall: Waterfall,
+        *,
+        intent: ResolveIntent = ResolveIntent.READ,
+    ) -> "tuple[Optional[Path], WaterfallTrace]":
+        """
+        Like ``get(tag, waterfall)`` but **never raises**.
+
+        Returns ``(path, trace)`` where *path* is ``None`` on failure.
+        Use this to debug waterfall resolution or build conditional logic
+        without try/except.
+        """
+        entry = self._registry.get(tag)
+        resolver = lambda mode: self._apply_anchor(entry.stored_path, mode)
+        return waterfall.resolve(resolver, intent=intent, with_trace=True)  # type: ignore[return-value]
 
     def exists(self, tag: str) -> bool:
         """
@@ -219,23 +293,6 @@ class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
         except (KeyError, FileNotFoundError, RuntimeError, ValueError):
             return False
 
-    # Convenience aliases that express intent at the call site
-    def getdir(
-        self,
-        tag: str,
-        mode: Union[PathMode, Waterfall] = PathMode.ABSOLUTE,
-    ) -> Path:
-        """Alias for ``get()``; signals that the result is expected to be a directory."""
-        return self.get(tag, mode)
-
-    def getfile(
-        self,
-        tag: str,
-        mode: Union[PathMode, Waterfall] = PathMode.ABSOLUTE,
-    ) -> Path:
-        """Alias for ``get()``; signals that the result is expected to be a file."""
-        return self.get(tag, mode)
-
     # ------------------------------------------------------------------ #
     #  Introspection                                                       #
     # ------------------------------------------------------------------ #
@@ -248,26 +305,20 @@ class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
         }
 
     def info(self) -> str:
-        """
-        Return a formatted multi-line diagnostic string covering environment
-        detection, configured anchors, and the full tag registry.
-        """
+        """Return a diagnostic string: environment state + full tag registry."""
         is_pyinstaller = EnvironmentResolver.is_pyinstaller()
-        exe_side = EnvironmentResolver.exe_side_root()
-        sys_temp = EnvironmentResolver.system_temp_root()
-        cwd = EnvironmentResolver.cwd()
-
         lines = [
             "=== SingletonPathManager ===",
             f"  pyinstaller : {is_pyinstaller}",
             f"  proj_root   : {self._proj_root or '(not set — call set_proj_root())'}",
-            f"  exe_side    : {exe_side}",
+            f"  app_name    : {self._app_name}",
+            f"  exe_side    : {EnvironmentResolver.exe_side_root()}",
         ]
         if is_pyinstaller:
             lines.append(f"  exe_inner   : {EnvironmentResolver.exe_inner_root()}")
         lines += [
-            f"  system_temp : {sys_temp}",
-            f"  cwd         : {cwd}",
+            f"  system_temp : {EnvironmentResolver.system_temp_root()}",
+            f"  cwd         : {EnvironmentResolver.cwd()}",
             "",
             f"  Registered tags ({len(self._registry.all_entries())}):",
         ]
@@ -280,7 +331,7 @@ class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
         return "\n".join(lines)
 
     # ------------------------------------------------------------------ #
-    #  Conflict resolution   (§7 — partial implementation)                #
+    #  Conflict resolution                                                 #
     # ------------------------------------------------------------------ #
 
     def resolve_conflict(
@@ -288,170 +339,102 @@ class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
         tag: str,
         *,
         strategy: Optional[ConflictStrategy] = None,
-        mode: PathMode = PathMode.ABSOLUTE,
     ) -> Path:
-        target = self.get(tag, mode)
+        """
+        Return a safe write path for *tag*, applying a conflict strategy
+        if the target already exists.
+
+        If the file does not exist, the registered path is returned as-is.
+        """
+        target = self.get(tag)
         _strategy = strategy or self._default_conflict_strategy
         if target.exists():
             resolved = _strategy.resolve(target)
             print(_strategy.conflict_info(target, resolved))
             return resolved
-        return target  ## will allow user to rebuild path or file i think ??
+        return target
 
     # ------------------------------------------------------------------ #
     #  Private helpers                                                     #
     # ------------------------------------------------------------------ #
 
-    def _to_absolute(self, entry: PathEntry) -> Path:
+    def _anchor_dir(self, mode: PathMode) -> Path:
         """
-        Convert ``entry.stored_path + entry.anchor`` → canonical absolute Path.
+        Return the base directory for a given *mode*.
 
-        This is the single source of truth for understanding how a stored
-        relative path maps to an actual location on disk.
+        This is the directory that ``register()``'s relative path is
+        appended to when *mode* is used as an anchor.
         """
-        p = entry.stored_path
-        anchor = entry.anchor
-
-        if anchor == PathMode.ABSOLUTE:
-            return p.resolve()
-
-        if anchor in (PathMode.PROJ_RELATIVE, PathMode.PROJ_ABSOLUTE):
-            if self._proj_root is None:
-                raise RuntimeError(
-                    f"Tag '{entry.tag}' uses a PROJ_* anchor but "
-                    "set_proj_root() has not been called on this manager."
-                )
-            return (self._proj_root / p).resolve()
-
-        if anchor in (PathMode.EXE_RELATIVE, PathMode.EXE_ABSOLUTE):
-            return (EnvironmentResolver.exe_side_root() / p).resolve()
-
-        if anchor == PathMode.EXE_INNER:
-            return (EnvironmentResolver.exe_inner_root() / p).resolve()
-
-        if anchor == PathMode.SYSTEM_TEMP:
-            return (EnvironmentResolver.system_temp_root() / p).resolve()
-
-        if anchor == PathMode.CWD:
-            return (EnvironmentResolver.cwd() / p).resolve()
-
-        raise ValueError(f"Unknown anchor PathMode: {anchor!r}")
-
-    def _resolve(self, entry: PathEntry, mode: PathMode) -> Path:
-        """
-        Resolve *entry* and express the result in the requested *mode*.
-
-        For absolute-like modes (``ABSOLUTE``, ``PROJ_ABSOLUTE``,
-        ``EXE_ABSOLUTE``, ``EXE_INNER``, ``SYSTEM_TEMP``) the result is
-        always an absolute path.
-
-        For relative modes (``PROJ_RELATIVE``, ``EXE_RELATIVE``, ``CWD``)
-        the result is a relative ``Path`` expressed from the corresponding
-        anchor.
-        """
-        absolute = self._to_absolute(entry)
-
-        if mode == PathMode.ABSOLUTE:
-            return absolute
-
-        if mode == PathMode.PROJ_RELATIVE:
-            if self._proj_root is None:
-                raise RuntimeError("set_proj_root() has not been called.")
-            try:
-                return absolute.relative_to(self._proj_root)
-            except ValueError:
-                raise ValueError(
-                    f"Tag '{entry.tag}': resolved path '{absolute}' is not "
-                    f"inside proj_root '{self._proj_root}'.  "
-                    "Cannot express as PROJ_RELATIVE."
-                )
-
-        if mode == PathMode.PROJ_ABSOLUTE:
-            if self._proj_root is None:
-                raise RuntimeError("set_proj_root() has not been called.")
-            return (self._proj_root / entry.stored_path).resolve()
-
-        if mode == PathMode.EXE_RELATIVE:
-            exe = EnvironmentResolver.exe_side_root()
-            try:
-                return absolute.relative_to(exe)
-            except ValueError:
-                # Path is outside exe_side_root; return stored_path as a
-                # best-effort relative representation.
-                return entry.stored_path
-
-        if mode == PathMode.EXE_ABSOLUTE:
-            return (EnvironmentResolver.exe_side_root() / entry.stored_path).resolve()
-
-        if mode == PathMode.EXE_INNER:
-            return (EnvironmentResolver.exe_inner_root() / entry.stored_path).resolve()
-
-        if mode == PathMode.SYSTEM_TEMP:
-            return (EnvironmentResolver.system_temp_root() / entry.stored_path).resolve()
-
-        if mode == PathMode.CWD:
-            try:
-                return absolute.relative_to(EnvironmentResolver.cwd())
-            except ValueError:
-                return absolute  # falls back to absolute if not under cwd
-
-        raise ValueError(f"Unknown PathMode: {mode!r}")
-
-    def _mode_to_absolute(self, entry: PathEntry, mode: PathMode) -> Path:
-        """
-        Construct an absolute path by combining *mode*'s anchor directory
-        with ``entry.stored_path``.
-
-        Used exclusively by ``_resolve_waterfall`` where we always need an
-        absolute path to check ``.exists()``.
-
-        Unlike ``_resolve``, this method ignores ``entry.anchor`` and
-        always interprets ``entry.stored_path`` as relative to whichever
-        anchor *mode* implies.
-        """
-        p = entry.stored_path
-
-        if mode == PathMode.ABSOLUTE:
-            return p.resolve()
-
         if mode in (PathMode.PROJ_RELATIVE, PathMode.PROJ_ABSOLUTE):
             if self._proj_root is None:
-                raise RuntimeError("set_proj_root() has not been called.")
-            return (self._proj_root / p).resolve()
+                raise RuntimeError(
+                    "A PROJ_* anchor requires set_proj_root() to be called first."
+                )
+            return self._proj_root
 
         if mode in (PathMode.EXE_RELATIVE, PathMode.EXE_ABSOLUTE):
-            return (EnvironmentResolver.exe_side_root() / p).resolve()
+            return EnvironmentResolver.exe_side_root()
 
         if mode == PathMode.EXE_INNER:
-            return (EnvironmentResolver.exe_inner_root() / p).resolve()
+            return EnvironmentResolver.exe_inner_root()
 
         if mode == PathMode.SYSTEM_TEMP:
-            return (EnvironmentResolver.system_temp_root() / p).resolve()
+            return EnvironmentResolver.system_temp_root()
 
         if mode == PathMode.CWD:
-            return (EnvironmentResolver.cwd() / p).resolve()
+            return EnvironmentResolver.cwd()
 
-        raise ValueError(f"Unknown PathMode in waterfall step: {mode!r}")
+        if mode == PathMode.SCRIPT_DIR:
+            return EnvironmentResolver.script_dir()
 
-    def _resolve_waterfall(self, entry: PathEntry, waterfall: Waterfall) -> Path:
-        """
-        Try each step of *waterfall* in order; return the first absolute
-        path that exists on disk.
+        if mode == PathMode.USER_HOME:
+            return EnvironmentResolver.user_home()
 
-        Raises ``FileNotFoundError`` (with full diagnostic info) if no
-        step yields an existing path.
-        """
-        tried: list[str] = []
-        for step in waterfall.steps:
-            try:
-                candidate = self._mode_to_absolute(entry, step)
-                if candidate.exists():
-                    return candidate
-                tried.append(f"{step.name}={candidate}")
-            except (RuntimeError, ValueError) as exc:
-                tried.append(f"{step.name}=<unavailable: {exc}>")
+        if mode == PathMode.USER_CONFIG:
+            return EnvironmentResolver.user_config(self._app_name)
 
-        raise FileNotFoundError(
-            f"Tag '{entry.tag}': no path found via {waterfall}.\n"
-            f"  Tried: {', '.join(tried)}"
+        if mode == PathMode.USER_DATA:
+            return EnvironmentResolver.user_data(self._app_name)
+
+        if mode == PathMode.USER_CACHE:
+            return EnvironmentResolver.user_cache(self._app_name)
+
+        if mode == PathMode.VIRTUAL_ENV:
+            return EnvironmentResolver.virtual_env()
+
+        raise ValueError(
+            f"PathMode.{mode.name} has no single base directory "
+            "(use ABSOLUTE or PACKAGE_RESOURCE only via _apply_anchor)."
         )
+
+    def _apply_anchor(self, stored_path: Path, anchor: PathMode) -> Path:
+        """
+        Canonical resolution: combine *anchor*'s base directory with
+        *stored_path* → absolute Path.
+
+        Used by both ``_to_absolute`` (registered anchor) and the waterfall
+        resolver (override anchor).
+        """
+        if anchor == PathMode.ABSOLUTE:
+            return stored_path.resolve()
+
+        if anchor == PathMode.PACKAGE_RESOURCE:
+            # Caller is expected to provide a pre-resolved resource path.
+            return stored_path.resolve()
+
+        return (self._anchor_dir(anchor) / stored_path).resolve()
+
+    def _to_absolute(self, entry: PathEntry) -> Path:
+        """Resolve *entry* using its registered anchor → canonical absolute Path."""
+        return self._apply_anchor(entry.stored_path, entry.anchor)
+
+    def _resolve_waterfall(
+        self,
+        entry: PathEntry,
+        waterfall: Waterfall,
+        *,
+        intent: ResolveIntent = ResolveIntent.READ,
+    ) -> Path:
+        """Delegate to Waterfall.resolve(), mapping each PathMode → absolute Path."""
+        resolver = lambda mode: self._apply_anchor(entry.stored_path, mode)
+        return waterfall.resolve(resolver, intent=intent)  # type: ignore[return-value]
