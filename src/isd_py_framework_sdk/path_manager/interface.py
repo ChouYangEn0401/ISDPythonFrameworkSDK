@@ -1,3 +1,24 @@
+"""
+IPathManager — abstract interface for path managers.
+
+Implement this interface to create project-specific path managers that
+can participate in larger multi-project or multi-process topologies.
+The reference implementation is ``SingletonPathManager``.
+
+Design contract
+---------------
+* ``set_proj_root`` — configure the project-root anchor
+* ``register`` / ``unregister`` / ``has`` — manage the tag → path registry
+* ``get`` — resolve a tag to a concrete ``Path``; accepts either a
+  ``PathMode`` (single representation) or a ``Waterfall`` (fallback chain)
+* ``exists`` — non-raising existence check
+* ``list_tags`` — introspect the registry (debugging / documentation)
+* ``resolve_conflict`` — compute a safe write path respecting a
+  ``ConflictStrategy`` (§7 reserved; skeleton)
+"""
+
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, Optional, Union
@@ -10,6 +31,10 @@ from ._conflict import ConflictStrategy
 class IPathManager(ABC):
     """Abstract base class for all path managers in the ISD framework."""
 
+    # ------------------------------------------------------------------ #
+    #  Configuration                                                       #
+    # ------------------------------------------------------------------ #
+
     @abstractmethod
     def set_proj_root(
         self,
@@ -17,7 +42,28 @@ class IPathManager(ABC):
         *,
         levels_up: int = 0,
     ) -> None:
+        """
+        Set the project-root directory used for ``PROJ_*`` modes.
+
+        Parameters
+        ----------
+        path :
+            A directory path **or** a ``__file__`` value from any module.
+            If *path* points to a file, its parent directory is the
+            starting point.
+        levels_up :
+            How many parent levels to ascend after resolving *path*.
+
+            Example — this file lives at ``project/src/pkg/config.py``
+            and we want ``project/`` as the root::
+
+                pm.set_proj_root(__file__, levels_up=2)
+        """
         ...
+
+    # ------------------------------------------------------------------ #
+    #  Registry                                                            #
+    # ------------------------------------------------------------------ #
 
     @abstractmethod
     def register(
@@ -25,10 +71,14 @@ class IPathManager(ABC):
         tag: str,
         path: Union[Path, str],
         *,
+        anchor: PathMode = PathMode.PROJ_RELATIVE,
         description: str = "",
     ) -> None:
         """
         Register *path* under *tag*.
+
+        Re-registering an existing tag silently overwrites the previous
+        entry.
 
         Parameters
         ----------
@@ -36,6 +86,10 @@ class IPathManager(ABC):
             Unique string identifier.
         path :
             The path to store.
+            Interpretation depends on *anchor*.
+        anchor :
+            How to interpret *path* (see ``PathMode`` docstring).
+            Defaults to ``PROJ_RELATIVE``.
         description :
             Human-readable note for documentation and ``info()`` output.
         """
@@ -93,6 +147,8 @@ class IPathManager(ABC):
         ------
         KeyError
             Tag not registered.
+        RuntimeError
+            Required anchor (e.g. ``proj_root``) not configured.
         FileNotFoundError
             Waterfall exhausted with no existing path found.
         """
@@ -120,8 +176,22 @@ class IPathManager(ABC):
     def list_tags(self) -> Dict[str, str]:
         """
         Return a ``{tag: description}`` mapping of all registered entries.
+
+        Useful for debugging, documentation generation, and CLI tooling.
         """
         ...
+
+    @abstractmethod
+    def info(self) -> str:
+        """
+        Return a formatted multi-line string summarising the manager's
+        current configuration and all registered tags.
+        """
+        ...
+
+    # ------------------------------------------------------------------ #
+    #  Conflict resolution   (§7 — reserved; skeleton)                    #
+    # ------------------------------------------------------------------ #
 
     @abstractmethod
     def resolve_conflict(
@@ -134,6 +204,13 @@ class IPathManager(ABC):
         """
         Compute a safe write path for *tag*, applying *strategy* if the
         resolved path already exists on disk.
+
+        If *strategy* is ``None``, the manager uses its configured default
+        (``IncrementSuffixStrategy`` out of the box).
+
+        This method does **not** perform any I/O — computing the path only.
+        Writing is the caller's responsibility.
+
         Returns
         -------
         Path

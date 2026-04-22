@@ -3,6 +3,15 @@ from enum import Enum, auto
 
 class PathMode(Enum):
     """
+    Declares the anchor (context) used to resolve or express a path.
+
+    Used in two complementary roles:
+
+    1. **As ``anchor`` when registering** — tells the manager what
+       ``stored_path`` is relative to.
+    2. **As ``mode`` when calling ``get()``** — tells the manager in which
+       representation to return the result.
+
     Members
     -------
     ABSOLUTE

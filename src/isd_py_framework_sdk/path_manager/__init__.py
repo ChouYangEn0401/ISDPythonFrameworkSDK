@@ -36,10 +36,23 @@ Conflict strategies
 ``TimestampSuffixStrategy``    — append ``_YYYYMMDD_HHMMSS``  ;;  附加時間戳後綴 `_YYYYMMDD_HHMMSS`
 ``IncrementSuffixStrategy``    — append ``_001``, ``_002``, …  ;;  附加遞增後綴 `_001`、`_002`、…
 
+Internal
+--------
+``PathEntry``  — single registry record (tag + stored_path + anchor)  ;;  單一註冊記錄（tag + stored_path + anchor）
+``EnvironmentResolver`` — static helpers for anchor directories  ;;  提供定位目錄的靜態輔助函式
 """
 
 from ._enums import PathMode
 from ._waterfall import Waterfall
+from ._resolver import EnvironmentResolver
+from ._conflict import (
+    ConflictStrategy,
+    OverwriteStrategy,
+    SkipIfExistsStrategy,
+    TimestampSuffixStrategy,
+    IncrementSuffixStrategy,
+)
+from ._registry import PathEntry
 from .interface import IPathManager
 from .singleton_path_manager import SingletonPathManager
 
@@ -49,4 +62,13 @@ __all__ = [
     "IPathManager",
     "PathMode",
     "Waterfall",
+    # Conflict strategies
+    "ConflictStrategy",
+    "OverwriteStrategy",
+    "SkipIfExistsStrategy",
+    "TimestampSuffixStrategy",
+    "IncrementSuffixStrategy",
+    # Helpers (exposed for subclassing / advanced use)
+    "PathEntry",
+    "EnvironmentResolver",
 ]
