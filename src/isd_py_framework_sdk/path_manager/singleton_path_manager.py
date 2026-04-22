@@ -61,3 +61,146 @@ shared across threads.
 
 執行緒共享程序記憶體，因此單例會自然地在執行緒間共享。
 """
+from src.isd_py_framework_sdk.base.Singleton import SingletonMetaclass
+
+
+class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
+    """
+    Thread-safe singleton path manager.
+    """
+
+    # ------------------------------------------------------------------ #
+    #  Singleton initialisation (called exactly once by SingletonMetaclass)#
+    # ------------------------------------------------------------------ #
+
+    def _initialize_manager(self) -> None:
+        self._registry: PathRegistry = PathRegistry()
+        self._proj_root: Optional[Path] = None
+        self._default_conflict_strategy: ConflictStrategy = IncrementSuffixStrategy()
+
+    # ------------------------------------------------------------------ #
+    #  Configuration                                                       #
+    # ------------------------------------------------------------------ #
+
+    def set_proj_root(
+        self,
+        path: Union[Path, str],
+        *,
+        levels_up: int = 0,
+    ) -> None:
+        """
+        levels_up :
+            How many parent levels to ascend from the resolved starting
+            point.
+
+        """
+        root = Path(path).resolve()
+        if root.is_file():
+            root = root.parent
+        for _ in range(levels_up):
+            root = root.parent
+        self._proj_root = root
+
+    def set_default_conflict_strategy(self, strategy: ConflictStrategy) -> None:
+        self._default_conflict_strategy = strategy
+
+    # ------------------------------------------------------------------ #
+    #  Registry                                                            #
+    # ------------------------------------------------------------------ #
+
+    def register(
+        self,
+        tag: str,
+        path: Union[Path, str],
+        *,
+        description: str = "",
+    ) -> None:
+        self._registry.add(
+            PathEntry(
+                tag=tag,
+                stored_path=Path(path),
+                description=description,
+            )
+        )
+
+    def unregister(self, tag: str) -> None:
+        self._registry.remove(tag)
+
+    def has(self, tag: str) -> bool:
+        return self._registry.has(tag)
+
+    # ------------------------------------------------------------------ #
+    #  Resolution                                                          #
+    # ------------------------------------------------------------------ #
+
+    def get(
+        self,
+        tag: str,
+        mode: Union[PathMode, Waterfall] = PathMode.ABSOLUTE,
+    ) -> Path:
+        entry = self._registry.get(tag)
+        if isinstance(mode, Waterfall):
+            return self._resolve_waterfall(entry, mode)
+        return self._resolve(entry, mode)
+
+    def exists(
+        self,
+        tag: str,
+        mode: Union[PathMode, Waterfall] = PathMode.ABSOLUTE,
+    ) -> bool:
+        try:
+            return self.get(tag, mode).exists()
+        except (KeyError, FileNotFoundError, RuntimeError, ValueError):
+            return False
+
+    # Convenience aliases that express intent at the call site
+    def getdir(
+        self,
+        tag: str,
+        mode: Union[PathMode, Waterfall] = PathMode.ABSOLUTE,
+    ) -> Path:
+        return self.get(tag, mode)
+
+    def getfile(
+        self,
+        tag: str,
+        mode: Union[PathMode, Waterfall] = PathMode.ABSOLUTE,
+    ) -> Path:
+        return self.get(tag, mode)
+
+    # ------------------------------------------------------------------ #
+    #  Introspection                                                       #
+    # ------------------------------------------------------------------ #
+
+    def list_tags(self) -> Dict[str, str]:
+        return {
+            tag: entry.description
+            for tag, entry in self._registry.all_entries().items()
+        }
+
+
+    def resolve_conflict(
+        self,
+        tag: str,
+        *,
+        strategy: Optional[ConflictStrategy] = None,
+        mode: PathMode = PathMode.ABSOLUTE,
+    ) -> Path:
+        target = self.get(tag, mode)
+        _strategy = strategy or self._default_conflict_strategy
+        if target.exists():
+            resolved = _strategy.resolve(target)
+            print(_strategy.conflict_info(target, resolved))
+            return resolved
+        return target  ## will allow user to rebuild path or file i think ??
+
+    # ------------------------------------------------------------------ #
+    #  Private helpers                                                     #
+    # ------------------------------------------------------------------ #
+
+
+    def _resolve(self, entry: PathEntry, mode: PathMode) -> Path:
+        ...
+
+    def _resolve_waterfall(self, entry: PathEntry, waterfall: Waterfall) -> Path:
+        ...

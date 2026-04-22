@@ -51,6 +51,10 @@ class IPathManager(ABC):
         """Return ``True`` if *tag* is currently registered."""
         ...
 
+    # ------------------------------------------------------------------ #
+    #  Resolution                                                          #
+    # ------------------------------------------------------------------ #
+
     @abstractmethod
     def get(
         self,
@@ -108,6 +112,10 @@ class IPathManager(ABC):
         """
         ...
 
+    # ------------------------------------------------------------------ #
+    #  Introspection                                                       #
+    # ------------------------------------------------------------------ #
+
     @abstractmethod
     def list_tags(self) -> Dict[str, str]:
         """
@@ -119,7 +127,9 @@ class IPathManager(ABC):
     def resolve_conflict(
         self,
         tag: str,
+        *,
         strategy: Optional[ConflictStrategy] = None,
+        mode: PathMode = PathMode.ABSOLUTE,
     ) -> Path:
         """
         Compute a safe write path for *tag*, applying *strategy* if the
