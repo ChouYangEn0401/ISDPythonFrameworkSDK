@@ -70,28 +70,15 @@ class IPathManager(ABC):
         self,
         tag: str,
         path: Union[Path, str],
+        anchor: PathMode,
         *,
-        anchor: PathMode = PathMode.PROJ_RELATIVE,
         description: str = "",
     ) -> None:
         """
-        Register *path* under *tag*.
+        Register *path* under *tag* with an explicit *anchor*.
 
-        Re-registering an existing tag silently overwrites the previous
-        entry.
-
-        Parameters
-        ----------
-        tag :
-            Unique string identifier.
-        path :
-            The path to store.
-            Interpretation depends on *anchor*.
-        anchor :
-            How to interpret *path* (see ``PathMode`` docstring).
-            Defaults to ``PROJ_RELATIVE``.
-        description :
-            Human-readable note for documentation and ``info()`` output.
+        *anchor* is **required** — it declares which base directory *path*
+        is relative to.  Re-registering an existing tag silently overwrites.
         """
         ...
 
@@ -113,44 +100,10 @@ class IPathManager(ABC):
     def get(
         self,
         tag: str,
-        mode: Union[PathMode, Waterfall] = PathMode.ABSOLUTE,
+        waterfall: Optional[Waterfall] = None,
+        *,
     ) -> Path:
         """
-        Resolve the path registered under *tag*.
-
-        Parameters
-        ----------
-        tag :
-            A previously registered tag.
-        mode :
-            ``PathMode``
-                Express the path in this representation.  Does **not**
-                require the path to exist on disk.
-
-                - ``ABSOLUTE`` → fully-resolved OS path (default)
-                - ``PROJ_RELATIVE`` → relative ``Path`` from ``proj_root``
-                - ``EXE_ABSOLUTE`` → absolute from exe/script directory
-                - etc.
-
-            ``Waterfall``
-                Try each step in order and return the first path that
-                **exists on disk**.  Raises ``FileNotFoundError`` if no
-                step yields an existing path (diagnostic info included).
-
-        Returns
-        -------
-        Path
-            Resolved path.  May be relative when *mode* is
-            ``PROJ_RELATIVE`` or ``EXE_RELATIVE``.
-
-        Raises
-        ------
-        KeyError
-            Tag not registered.
-        RuntimeError
-            Required anchor (e.g. ``proj_root``) not configured.
-        FileNotFoundError
-            Waterfall exhausted with no existing path found.
         """
         ...
 
@@ -158,10 +111,11 @@ class IPathManager(ABC):
     def exists(
         self,
         tag: str,
-        mode: Union[PathMode, Waterfall] = PathMode.ABSOLUTE,
-    ) -> bool:
+
+    @abstractmethod
+    def exists(self, tag: str) -> bool:
         """
-        Non-raising wrapper around ``get``.
+        Non-raising existence check.
 
         Returns ``True`` if the resolved path exists on disk;
         ``False`` for any error (tag not found, anchor not set, etc.).
@@ -174,23 +128,16 @@ class IPathManager(ABC):
 
     @abstractmethod
     def list_tags(self) -> Dict[str, str]:
-        """
-        Return a ``{tag: description}`` mapping of all registered entries.
-
-        Useful for debugging, documentation generation, and CLI tooling.
-        """
+        """Return ``{tag: description}`` for all registered entries."""
         ...
 
     @abstractmethod
     def info(self) -> str:
-        """
-        Return a formatted multi-line string summarising the manager's
-        current configuration and all registered tags.
-        """
+        """Return a diagnostic string: environment state + full tag registry."""
         ...
 
     # ------------------------------------------------------------------ #
-    #  Conflict resolution   (§7 — reserved; skeleton)                    #
+    #  Conflict resolution                                                 #
     # ------------------------------------------------------------------ #
 
     @abstractmethod
@@ -218,3 +165,4 @@ class IPathManager(ABC):
             resolved path when a conflict was detected).
         """
         ...
+

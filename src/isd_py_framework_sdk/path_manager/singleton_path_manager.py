@@ -82,13 +82,16 @@ class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
     """
 
     # ------------------------------------------------------------------ #
-    #  Singleton initialisation (called exactly once by SingletonMetaclass)#
+    #  Singleton initialisation (called exactly once)                     #
     # ------------------------------------------------------------------ #
 
     def _initialize_manager(self) -> None:
-        self._registry: PathRegistry = PathRegistry()
+        self._app_name: str = "app"
         self._proj_root: Optional[Path] = None
+        self._registry: PathRegistry = PathRegistry()
+        
         self._default_conflict_strategy: ConflictStrategy = IncrementSuffixStrategy()
+        self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ #
     #  Configuration                                                       #
@@ -126,11 +129,14 @@ class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
         self._proj_root = root
 
     def set_default_conflict_strategy(self, strategy: ConflictStrategy) -> None:
-        """
-        Replace the default conflict strategy used when ``resolve_conflict``
-        is called without an explicit *strategy* argument.
-        """
+        """Replace the strategy used by ``resolve_conflict`` when no explicit one is given."""
         self._default_conflict_strategy = strategy
+
+    def set_app_name(self, name: str) -> None:
+        """
+        Set the application name used when resolving ``USER_*`` anchors.
+        """
+        self._app_name = name
 
     # ------------------------------------------------------------------ #
     #  Registry                                                            #
@@ -140,23 +146,48 @@ class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
         self,
         tag: str,
         path: Union[Path, str],
+        anchor: PathMode,
         *,
-        anchor: PathMode = PathMode.PROJ_RELATIVE,
         description: str = "",
     ) -> None:
-        self._registry.add(
-            PathEntry(
-                tag=tag,
-                stored_path=Path(path),
-                anchor=anchor,
-                description=description,
+        """
+        Register *path* under *tag* with an explicit *anchor*.
+
+        *anchor* is **required** — it declares which base directory
+        *path* is relative to:
+
+        ==================  ===========================================
+        ``PathMode``        Base directory
+        ==================  ===========================================
+        ``PROJ_ABSOLUTE``   ``proj_root`` (set via ``set_proj_root``)
+        ``EXE_ABSOLUTE``    Directory containing the running exe/script
+        ``EXE_INNER``       ``sys._MEIPASS`` (PyInstaller bundle)
+        ``USER_CONFIG``     ``~/.config/<app_name>`` (or OS equivalent)
+        ``USER_DATA``       ``~/.local/share/<app_name>``
+        ``USER_CACHE``      ``~/.cache/<app_name>``
+        ``SYSTEM_TEMP``     System temp directory
+        ``CWD``             Current working directory at call time
+        ``ABSOLUTE``        *path* is already an absolute path
+        ==================  ===========================================
+
+        Re-registering an existing *tag* silently overwrites it.
+        """
+        with self._lock:
+            self._registry.add(
+                PathEntry(
+                    tag=tag,
+                    stored_path=Path(path),
+                    anchor=anchor,
+                    description=description,
+                )
             )
-        )
 
     def unregister(self, tag: str) -> None:
+        """Remove *tag* from the registry.  Raises ``KeyError`` if absent."""
         self._registry.remove(tag)
 
     def has(self, tag: str) -> bool:
+        """Return ``True`` if *tag* is currently registered."""
         return self._registry.has(tag)
 
     # ------------------------------------------------------------------ #
@@ -166,20 +197,25 @@ class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
     def get(
         self,
         tag: str,
-        mode: Union[PathMode, Waterfall] = PathMode.ABSOLUTE,
+        waterfall: Optional[Waterfall] = None,
     ) -> Path:
         entry = self._registry.get(tag)
-        if isinstance(mode, Waterfall):
-            return self._resolve_waterfall(entry, mode)
-        return self._resolve(entry, mode)
+        if waterfall is not None:
+            return self._resolve_waterfall(entry, waterfall, intent=intent)
+        return self._to_absolute(entry)
 
-    def exists(
         self,
         tag: str,
-        mode: Union[PathMode, Waterfall] = PathMode.ABSOLUTE,
-    ) -> bool:
+
+    def exists(self, tag: str) -> bool:
+        """
+        Non-raising existence check.
+
+        Returns ``True`` if the resolved path exists on disk.
+        Returns ``False`` for any error (tag not found, anchor not set, etc.).
+        """
         try:
-            return self.get(tag, mode).exists()
+            return self.get(tag).exists()
         except (KeyError, FileNotFoundError, RuntimeError, ValueError):
             return False
 
@@ -205,6 +241,7 @@ class SingletonPathManager(IPathManager, metaclass=SingletonMetaclass):
     # ------------------------------------------------------------------ #
 
     def list_tags(self) -> Dict[str, str]:
+        """Return ``{tag: description}`` for all registered entries."""
         return {
             tag: entry.description
             for tag, entry in self._registry.all_entries().items()

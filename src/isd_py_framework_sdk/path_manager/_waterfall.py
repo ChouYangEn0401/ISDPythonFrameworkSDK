@@ -19,21 +19,19 @@ Usage
     # Pre-built waterfall
     path = pm.get("my_config", Waterfall.EXE_PREFER_BUNDLED)
 
-Pre-built waterfalls
+Pre-built Waterfalls
 --------------------
-``Waterfall.EXE_PREFER_BUNDLED``
-    Read-optimized for deployed exes: try bundled data first, then
-    the exe-side folder, then the project root.
+Designed from real engineering scenarios:
 
-``Waterfall.DEV_STANDARD``
-    Development default: project root → raw absolute → cwd.
-
-``Waterfall.EXE_WRITE_SAFE``
-    Write-optimized for deployed exes: exe-side folder first, fall
-    back to system temp if that is not writable/available.
-
-``Waterfall.UNIVERSAL``
-    Maximum compatibility: tries every anchor in a sensible order.
++-------------------------------+----------------------------------------------+
+| Constant                      | Use-case                                     |
++===============================+==============================================+
+| DEV_STANDARD                  | Daily dev: project root → cwd               |
+| DEV_WITH_USER_CONFIG          | Dev tools that honour ~/.config overrides   |
+| EXE_PREFER_BUNDLED            | PyInstaller: bundled data → exe-side        |
+| CI_ARTIFACT                   | CI: proj root → cwd → sys temp             |
+| UNIVERSAL                     | Maximum compatibility fallback              |
++-------------------------------+----------------------------------------------+
 """
 
 from __future__ import annotations
@@ -71,11 +69,21 @@ class Waterfall:
         return hash(self._steps)
 
     # ------------------------------------------------------------------ #
-    #  Pre-built strategies (assigned after class definition)              #
+    #  Pre-built strategies (assigned after class body)                   #
     # ------------------------------------------------------------------ #
 
-    #: Read-optimized for deployed exes.
-    #: ``EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE``
+    # -- Developer workstation ------------------------------------------
+
+    #: Standard dev reading: project root first, fall back to cwd.
+    DEV_STANDARD: "Waterfall"
+
+    #: Dev tools that let ~/.config override project defaults
+    #: (e.g. personal API keys, local DB credentials).
+    DEV_WITH_USER_CONFIG: "Waterfall"
+
+    # -- PyInstaller / frozen executable --------------------------------
+
+    #: Frozen exe: prefer bundled-in data → shipped data next to exe → proj root.
     EXE_PREFER_BUNDLED: "Waterfall"
 
     #: Standard development fallback chain.
@@ -86,13 +94,36 @@ class Waterfall:
     #: ``EXE_ABSOLUTE → SYSTEM_TEMP``
     EXE_WRITE_SAFE: "Waterfall"
 
-    #: Maximum compatibility — tries everything.
-    #: ``EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE → CWD → SYSTEM_TEMP``
+    # -- CI / automated testing ------------------------------------------
+
+    #: CI pipelines: proj root → cwd (workspace root) → sys temp (artefact dir).
+    CI_ARTIFACT: "Waterfall"
+
+    # -- Maximum compatibility -------------------------------------------
+
+    #: Try everything in a sensible order.  Good for writing library code
+    #: that must work in dev, deployed, and frozen envs without configuration.
     UNIVERSAL: "Waterfall"
 
 
-# Assign pre-built instances after the class is defined so that the
-# type annotations above work correctly.
+# ------------------------------------------------------------------ #
+#  Pre-built instances                                                #
+# ------------------------------------------------------------------ #
+
+# Developer workstation
+Waterfall.DEV_STANDARD = Waterfall(
+    PathMode.PROJ_ABSOLUTE,
+    PathMode.CWD,
+)
+
+Waterfall.DEV_WITH_USER_CONFIG = Waterfall(
+    PathMode.USER_CONFIG,
+    PathMode.PROJ_ABSOLUTE,
+    PathMode.CWD,
+)
+
+
+# PyInstaller / frozen
 Waterfall.EXE_PREFER_BUNDLED = Waterfall(
     PathMode.EXE_INNER,
     PathMode.EXE_ABSOLUTE,
@@ -105,15 +136,20 @@ Waterfall.DEV_STANDARD = Waterfall(
     PathMode.CWD,
 )
 
-Waterfall.EXE_WRITE_SAFE = Waterfall(
-    PathMode.EXE_ABSOLUTE,
+# CI
+Waterfall.CI_ARTIFACT = Waterfall(
+    PathMode.PROJ_ABSOLUTE,
+    PathMode.CWD,
     PathMode.SYSTEM_TEMP,
 )
 
+# Universal
 Waterfall.UNIVERSAL = Waterfall(
     PathMode.EXE_INNER,
     PathMode.EXE_ABSOLUTE,
     PathMode.PROJ_ABSOLUTE,
     PathMode.CWD,
+    PathMode.USER_DATA,
     PathMode.SYSTEM_TEMP,
 )
+

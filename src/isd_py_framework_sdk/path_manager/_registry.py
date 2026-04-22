@@ -70,7 +70,7 @@ class PathRegistry:
     # ------------------------------------------------------------------ #
 
     def add(self, entry: PathEntry, b_force_add: bool = False) -> None:
-        """Insert or overwrite the entry for ``entry.tag``."""
+        """Insert or silently overwrite the entry for ``entry.tag``."""
         if entry.tag in self._entries and not b_force_add:
             raise KeyError(f"Path tag '{entry.tag}' is already registered.")
         self._entries[entry.tag] = entry
