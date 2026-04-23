@@ -1546,12 +1546,28 @@ wf = Waterfall(PathMode.EXE_INNER, PathMode.EXE_ABSOLUTE, PathMode.PROJ_ABSOLUTE
 path = pm.get("config", wf)
 ```
 
-| 內建 Waterfall | 步驟 | 適合場景 |
-|---------------|------|----------|
-| `Waterfall.EXE_PREFER_BUNDLED` | EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE | 打包後優先讀 bundle 資料 |
-| `Waterfall.DEV_STANDARD` | PROJ_ABSOLUTE → ABSOLUTE → CWD | 開發期間標準讀取 |
-| `Waterfall.EXE_WRITE_SAFE` | EXE_ABSOLUTE → SYSTEM_TEMP | 打包後寫入安全策略 |
-| `Waterfall.UNIVERSAL` | EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE → CWD → SYSTEM_TEMP | 最大相容 |
+**Active presets — 各具不同功能的正規 preset（每個步驟都不重複）**
+
+| Waterfall preset | 步驟（→ 順序） | 適合場景 |
+|---|---|---|
+| `DEV_STANDARD` | PROJ_ABSOLUTE → CWD | 日常開發讀取 |
+| `DEV_WITH_USER_CONFIG` | USER_CONFIG → PROJ_ABSOLUTE → CWD | 個人設定可覆蓋專案預設（dev tool） |
+| `PROD_READ` | PROJ_ABSOLUTE → EXE_ABSOLUTE → USER_CONFIG | 部署後讀取資源 / 設定 |
+| `PROD_WRITE` | EXE_ABSOLUTE → USER_DATA → SYSTEM_TEMP | 部署後寫入紀錄 / 輸出 |
+| `EXE_PREFER_BUNDLED` | EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE | PyInstaller — 內嵌資源優先，外部無法覆蓋 |
+| `EXE_OVERRIDE` | EXE_ABSOLUTE → USER_CONFIG → EXE_INNER | PyInstaller — 覆蓋模式：外部檔案可替換內嵌預設資源 |
+| `ETL_INPUT` | PROJ_ABSOLUTE → CWD → SYSTEM_TEMP | ETL 管線讀取輸入資料 |
+| `ETL_OUTPUT` | PROJ_ABSOLUTE → USER_DATA → SYSTEM_TEMP | ETL 管線寫入輸出（WRITE intent） |
+| `UNIVERSAL` | EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE → CWD → USER_DATA → SYSTEM_TEMP | 最高相容性，任環境通用 |
+
+**Retired aliases — 步驟與上表重複，保留以維持向下相容，新程式碼請勿使用**
+
+| alias | 等同 |
+|---|---|
+| `CI_ARTIFACT` | `ETL_INPUT` |
+| `EXE_WRITE_SAFE` | `PROD_WRITE` |
+
+> 以 `from isd_py_framework_sdk.path_manager import PRESETS` 可取得所有 active preset 的 `dict[str, Waterfall]`，方便程式迭代比對。
 
 ### 快速試用
 
@@ -1592,11 +1608,14 @@ print(pm.info())                                  # 格式化診斷字串
 ### Waterfall — PyInstaller 打包情境
 
 ```python
-# 打包後：先嘗試 exe 內部，再找 exe 旁邊的目錄，最後找專案根目錄
+# 讀取：先嘗試 exe 內部 MEIPASS，再往外找 → 內嵌資源優先
 path = pm.get("config_file", Waterfall.EXE_PREFER_BUNDLED)
 
-# 寫入時使用安全策略（先嘗試 exe 旁邊，退而求其次用系統暫存）
-write_path = pm.get("result_xlsx", Waterfall.EXE_WRITE_SAFE)
+# 覆蓋模式：先找 exe 旁邊目錄，再找 USER_CONFIG，最後才用內嵌 → 方便使用者替換預設設定
+path = pm.get("config_file", Waterfall.EXE_OVERRIDE)
+
+# 寫入：先嘗試 exe 旁邊，退回 USER_DATA，最後用系統暫存
+write_path = pm.get("result_xlsx", Waterfall.PROD_WRITE)
 ```
 
 ### 存檔衝突處理

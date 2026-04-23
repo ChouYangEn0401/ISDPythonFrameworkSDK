@@ -1,57 +1,65 @@
 """
-Waterfall — ordered fallback chain for path resolution.
+Waterfall — 有序回退鏈，用於跨環境路徑解析。
+Waterfall — ordered fallback chain for cross-environment path resolution.
 
 A ``Waterfall`` is a sequence of ``PathMode`` steps.  During resolution the
 manager attempts each step in order and returns the first path that satisfies
-a **validation check**.  By default:
+a **validation check** ("first found wins").
+一個 ``Waterfall`` 是一連串有序的 ``PathMode`` 步驟，依序嘗試每個步驟，
+回傳第一個滿足驗證條件的路徑（誰先讀到就不往下走）。
 
-- ``ResolveIntent.READ``  → the path must exist and be readable
-- ``ResolveIntent.WRITE`` → the path's parent must exist and be writable
-  (the path itself may not yet exist)
+By default / 預設驗證規則:
+
+- ``ResolveIntent.READ``  → 路徑必須存在於磁碟 / the path must exist on disk
+- ``ResolveIntent.WRITE`` → 路徑最近的已存在祖先目錄必須可寫入
+  / the nearest existing ancestor of the path must be writable
 
 If you need custom validation, pass a ``check`` callable to the constructor.
+若需要自訂驗證邏輯，可將 ``check`` callable 傳入建構子。
 
 If no step passes, a ``FileNotFoundError`` is raised that includes a
 ``WaterfallTrace`` listing every attempt — making debugging easy.
+若所有步驟皆失敗，拋出 ``FileNotFoundError``，並附上完整的 ``WaterfallTrace``
+供除錯用。
 
-Usage
------
+Usage / 使用範例
+----------------
 ::
 
     from isd_py_framework_sdk.path_manager import Waterfall, PathMode, ResolveIntent
 
-    # Custom waterfall
+    # 自訂 waterfall / Custom waterfall
     wf = Waterfall(PathMode.EXE_INNER, PathMode.EXE_ABSOLUTE, PathMode.PROJ_ABSOLUTE)
 
-    # Standard resolution (READ intent, raises on failure)
+    # 標準讀取（失敗時 raise）/ Standard read (raises on failure)
     path = pm.get("my_config", wf)
 
-    # Write resolution
+    # 寫入意圖 / Write intent
     path = pm.get("output_excel", Waterfall.ETL_OUTPUT, intent=ResolveIntent.WRITE)
 
-    # Debug: see every attempt regardless of outcome
+    # 取得 trace（不 raise）/ Inspect trace without raising
     path, trace = pm.get_with_trace("my_config", wf)
-    for attempt in trace:
-        print(attempt)
+    print(trace)  # 印出每步驟的 ✓/✗
 
-Pre-built Waterfalls
---------------------
-Designed from real engineering scenarios:
+Active Presets / 啟用中的預設值
+--------------------------------
++---------------------+-----------------------------+-------------------------------------+
+| Constant            | Steps (→ order)             | Use-case                            |
++=====================+=============================+=====================================+
+| DEV_STANDARD        | PROJ → CWD                  | 日常開發：優先專案根，退回 CWD       |
+| DEV_WITH_USER_CONFIG| USER_CFG → PROJ → CWD       | 個人設定覆蓋專案預設（dev tool）     |
+| PROD_READ           | PROJ → EXE → USER_CFG       | 部署後讀取資源 / 設定檔              |
+| PROD_WRITE          | EXE → USER_DATA → TEMP      | 部署後寫入紀錄 / 輸出                |
+| EXE_PREFER_BUNDLED  | EXE_INNER → EXE → PROJ      | PyInstaller：內嵌資源優先（唯讀）    |
+| EXE_OVERRIDE        | EXE → USER_CFG → EXE_INNER  | PyInstaller：允許外部檔案覆蓋內嵌資源|
+| ETL_INPUT           | PROJ → CWD → TEMP           | ETL 管線：尋找輸入資料              |
+| ETL_OUTPUT          | PROJ → USER_DATA → TEMP     | ETL 管線：寫入輸出（確保可寫）       |
+| UNIVERSAL           | (all 6 modes in order)      | 最高相容性：任環境通用               |
++---------------------+-----------------------------+-------------------------------------+
 
-+-------------------------------+----------------------------------------------+
-| Constant                      | Use-case                                     |
-+===============================+==============================================+
-| DEV_STANDARD                  | Daily dev: project root → cwd               |
-| DEV_WITH_USER_CONFIG          | Dev tools that honour ~/.config overrides   |
-| PROD_READ                     | Deployed app reading config / assets        |
-| PROD_WRITE                    | Deployed app writing logs / results         |
-| EXE_PREFER_BUNDLED            | PyInstaller: bundled data → exe-side        |
-| EXE_WRITE_SAFE                | PyInstaller writes: exe-side → sys temp     |
-| ETL_INPUT                     | ETL pipeline: find input data               |
-| ETL_OUTPUT                    | ETL pipeline: find/create output location   |
-| CI_ARTIFACT                   | CI: proj root → cwd → sys temp             |
-| UNIVERSAL                     | Maximum compatibility fallback              |
-+-------------------------------+----------------------------------------------+
+Retired aliases (identical steps, kept for back-compat) / 退役別名（步驟與上表重複，保留以維持相容性）:
+  CI_ARTIFACT  = ETL_INPUT   (PROJ → CWD → TEMP)
+  EXE_WRITE_SAFE = PROD_WRITE  (EXE → USER_DATA → TEMP)
 """
 
 from __future__ import annotations
@@ -290,127 +298,209 @@ class Waterfall:
         return hash(self._steps)
 
     # ------------------------------------------------------------------ #
-    #  Pre-built strategies (assigned after class body)                   #
+    #  Pre-built preset annotations  (instances assigned after class)    #
+    #  預設 preset 的型別宣告（實例在 class body 後賦值）                 #
     # ------------------------------------------------------------------ #
 
-    # -- Developer workstation ------------------------------------------
+    # ── Developer workstation（開發機）────────────────────────────────
 
-    #: Standard dev reading: project root first, fall back to cwd.
+    #: 日常開發讀取：優先專案根目錄，找不到則退回 CWD。
+    #: Daily dev reading: project root first, fall back to cwd.
     DEV_STANDARD: "Waterfall"
 
-    #: Dev tools that let ~/.config override project defaults
-    #: (e.g. personal API keys, local DB credentials).
+    #: 帶個人設定覆蓋的開發模式：USER_CONFIG 優先（例如個人 API key），
+    #: 再到專案根，再到 CWD。
+    #: Dev with personal overrides: USER_CONFIG first (e.g. local API keys),
+    #: then project root, then cwd.
     DEV_WITH_USER_CONFIG: "Waterfall"
 
-    # -- Production / deployed app ---------------------------------------
+    # ── Production / deployed app（部署後應用）────────────────────────
 
-    #: Deployed app reading config, assets, reference data.
-    #: Tries project root, then exe-side, then user config.
+    #: 已部署程式讀取資源 / 設定：專案根 → exe 旁 → USER_CONFIG。
+    #: Deployed app reading assets or config: proj root → exe-side → user config.
     PROD_READ: "Waterfall"
 
-    #: Deployed app writing logs, outputs, caches.
-    #: Tries exe-side folder, then user data dir, then system temp.
+    #: 已部署程式寫入紀錄 / 輸出：exe 旁（若可寫）→ USER_DATA → SYSTEM_TEMP。
+    #: Deployed app writing logs or outputs: exe-side → user data dir → system temp.
     PROD_WRITE: "Waterfall"
 
-    # -- PyInstaller / frozen executable --------------------------------
+    # ── PyInstaller / frozen executable（打包執行檔）─────────────────
 
-    #: Frozen exe: prefer bundled-in data → shipped data next to exe → proj root.
+    #: 【唯讀-內嵌優先】凍結 exe 讀取：EXE_INNER（MEIPASS）優先 → exe 旁 → 專案根。
+    #: 用於出廠預設資源：外部檔案**無法**覆蓋內嵌資料。
+    #:
+    #: [Read, bundled wins] Frozen exe reading: EXE_INNER (sys._MEIPASS) first
+    #: → beside exe → project root.
+    #: Use for factory defaults that must not be overridden by external files.
     EXE_PREFER_BUNDLED: "Waterfall"
 
-    #: Frozen exe writing outputs or cache: exe-side folder → user data → sys temp.
-    EXE_WRITE_SAFE: "Waterfall"
+    #: 【覆蓋模式 / Override mode】凍結 exe 讀取：exe 旁 → USER_CONFIG → EXE_INNER。
+    #: 允許使用者把檔案放在 exe 旁（或 USER_CONFIG）來覆蓋內嵌的預設資源，
+    #: 如果外部都找不到才回退到 MEIPASS 內的版本。
+    #:
+    #: [Read, external overrides bundled] Frozen exe reading: beside exe first
+    #: → user config → EXE_INNER (MEIPASS) as last resort.
+    #: Allows patching a deployed app by placing a file next to the exe
+    #: without recompiling — the external file wins.
+    EXE_OVERRIDE: "Waterfall"
 
-    # -- ETL pipelines ---------------------------------------------------
+    # ── ETL pipelines（批次管線）──────────────────────────────────────
 
-    #: ETL input: find source data under proj root, then cwd, then sys temp
-    #: (staging area).
+    #: ETL 輸入：在專案根找原始資料，退回 CWD，最後退到 SYSTEM_TEMP（staging 區）。
+    #: ETL input: find source data under project root, then cwd, then staging temp.
     ETL_INPUT: "Waterfall"
 
-    #: ETL output: write results to proj root output dir; if unavailable use
-    #: user data dir; last resort sys temp so the pipeline never crashes silently.
+    #: ETL 輸出（WRITE intent）：優先寫到專案根 outputs；若不可用則 USER_DATA；
+    #: 最後退到 SYSTEM_TEMP 確保管線不會因為找不到輸出目錄而中止。
+    #: ETL output (WRITE intent): write to project root first, then user data dir,
+    #: last resort system temp so the pipeline never crashes silently.
     ETL_OUTPUT: "Waterfall"
 
-    # -- CI / automated testing ------------------------------------------
+    # ── Maximum compatibility（最高相容性）────────────────────────────
 
-    #: CI pipelines: proj root → cwd (workspace root) → sys temp (artefact dir).
-    CI_ARTIFACT: "Waterfall"
-
-    # -- Maximum compatibility -------------------------------------------
-
-    #: Try everything in a sensible order.  Good for writing library code
-    #: that must work in dev, deployed, and frozen envs without configuration.
+    #: 依序嘗試全部六個定位點，適合要在開發、部署、凍結三種環境下都能運作的函式庫程式碼。
+    #: Try all six anchors in a sensible order — good for library code that must
+    #: work in dev, deployed, and frozen environments without extra configuration.
     UNIVERSAL: "Waterfall"
 
+    # ── Retired aliases（退役別名）────────────────────────────────────
+    # 以下兩個 preset 步驟與上方重複，保留以維持向下相容性，不建議新程式碼使用。
+    # The following two presets are identical to existing ones above.
+    # Kept for back-compat only — do not use in new code.
+
+    #: [alias] CI pipeline artefacts — identical steps to ETL_INPUT.
+    #: [別名] CI 管線產出物 — 步驟與 ETL_INPUT 完全相同。
+    CI_ARTIFACT: "Waterfall"
+
+    #: [alias] PyInstaller write-safe — identical steps to PROD_WRITE.
+    #: [別名] PyInstaller 安全寫出 — 步驟與 PROD_WRITE 完全相同。
+    EXE_WRITE_SAFE: "Waterfall"
+
 
 # ------------------------------------------------------------------ #
-#  Pre-built instances                                                #
+#  Pre-built instances（預設實例賦值）                                 #
 # ------------------------------------------------------------------ #
 
-# Developer workstation
+# ── Developer workstation / 開發機 ────────────────────────────────────────
+#   最常見的開發情境：先找專案根，找不到退回當前工作目錄。
+#   Most common dev scenario: try project root first, fall back to cwd.
+
 Waterfall.DEV_STANDARD = Waterfall(
-    PathMode.PROJ_ABSOLUTE,
-    PathMode.CWD,
+    PathMode.PROJ_ABSOLUTE,   # 1. 專案根 / project root
+    PathMode.CWD,             # 2. 當前工作目錄 / current working directory
 )
+
+#   帶個人覆蓋的開發模式：允許 ~/.config/<app> 裡的設定覆蓋專案預設值，
+#   適合存放個人 API key、本機資料庫 DSN 等不應版控的資訊。
+#   Dev with personal override: USER_CONFIG can shadow project defaults.
+#   Useful for local API keys, DB credentials that must not be committed.
 
 Waterfall.DEV_WITH_USER_CONFIG = Waterfall(
-    PathMode.USER_CONFIG,
-    PathMode.PROJ_ABSOLUTE,
-    PathMode.CWD,
+    PathMode.USER_CONFIG,     # 1. 使用者設定目錄（可覆蓋）/ user config (can override)
+    PathMode.PROJ_ABSOLUTE,   # 2. 專案根預設值 / project root default
+    PathMode.CWD,             # 3. 工作目錄退路 / cwd fallback
 )
 
-# Production
+# ── Production / deployed app / 部署後 ────────────────────────────────────
+#   讀取：專案根 → exe 旁 → USER_CONFIG（三層覆蓋鏈）
+#   Reading: project root → beside exe → user config (3-tier chain)
+
 Waterfall.PROD_READ = Waterfall(
-    PathMode.PROJ_ABSOLUTE,
-    PathMode.EXE_ABSOLUTE,
-    PathMode.USER_CONFIG,
+    PathMode.PROJ_ABSOLUTE,   # 1. 專案根 / project root
+    PathMode.EXE_ABSOLUTE,    # 2. exe 旁（部署後常見位置）/ beside .exe
+    PathMode.USER_CONFIG,     # 3. 使用者設定（最後機會）/ user config last chance
 )
+
+#   寫入：exe 旁（若可寫）→ 使用者資料目錄 → 系統 TEMP。
+#   Writing: beside exe (if writable) → user data dir → system temp.
 
 Waterfall.PROD_WRITE = Waterfall(
-    PathMode.EXE_ABSOLUTE,
-    PathMode.USER_DATA,
-    PathMode.SYSTEM_TEMP,
+    PathMode.EXE_ABSOLUTE,    # 1. exe 旁（最理想，日誌/輸出放這）/ beside exe (ideal)
+    PathMode.USER_DATA,       # 2. 使用者資料目錄 / user data directory
+    PathMode.SYSTEM_TEMP,     # 3. 系統暫存（兜底）/ system temp (last resort)
 )
 
-# PyInstaller / frozen
+# ── PyInstaller / frozen executable / 打包執行檔 ─────────────────────────
+#
+#   兩個 exe 相關 preset 設計上是互補的：
+#   The two exe presets are intentionally complementary:
+#
+#   EXE_PREFER_BUNDLED : MEIPASS 優先 → 內嵌資源不可被外部檔案覆蓋。
+#                        MEIPASS wins  → bundled data cannot be overridden externally.
+#
+#   EXE_OVERRIDE       : exe旁 優先 → 外部檔案可覆蓋內嵌預設資源。
+#                        Beside-exe wins → external file can override bundled default.
+#
+#   選哪個取決於你是否希望讓使用者能在不重新編譯的情況下替換內嵌資源。
+#   Choose based on whether users should be able to patch assets without recompiling.
+
 Waterfall.EXE_PREFER_BUNDLED = Waterfall(
-    PathMode.EXE_INNER,
-    PathMode.EXE_ABSOLUTE,
-    PathMode.PROJ_ABSOLUTE,
+    PathMode.EXE_INNER,       # 1. MEIPASS（內嵌資源，不可被覆蓋）/ bundled, cannot override
+    PathMode.EXE_ABSOLUTE,    # 2. exe 旁 / beside exe
+    PathMode.PROJ_ABSOLUTE,   # 3. 專案根（開發時退路）/ project root (dev fallback)
 )
 
-Waterfall.EXE_WRITE_SAFE = Waterfall(
-    PathMode.EXE_ABSOLUTE,
-    PathMode.USER_DATA,
-    PathMode.SYSTEM_TEMP,
+Waterfall.EXE_OVERRIDE = Waterfall(
+    PathMode.EXE_ABSOLUTE,    # 1. exe 旁（外部覆蓋優先）/ beside exe (external override wins)
+    PathMode.USER_CONFIG,     # 2. 使用者設定（次要覆蓋）/ user config (secondary override)
+    PathMode.EXE_INNER,       # 3. MEIPASS（內嵌預設值，最後退路）/ bundled default, last resort
 )
 
-# ETL
+# ── ETL pipelines / 批次管線 ──────────────────────────────────────────────
+
 Waterfall.ETL_INPUT = Waterfall(
-    PathMode.PROJ_ABSOLUTE,
-    PathMode.CWD,
-    PathMode.SYSTEM_TEMP,
+    PathMode.PROJ_ABSOLUTE,   # 1. 專案根（標準輸入位置）/ project root (standard input location)
+    PathMode.CWD,             # 2. 工作目錄（暫時測試用）/ cwd (for quick tests)
+    PathMode.SYSTEM_TEMP,     # 3. TEMP（staging 暫存區）/ system temp (staging area)
 )
 
 Waterfall.ETL_OUTPUT = Waterfall(
-    PathMode.PROJ_ABSOLUTE,
-    PathMode.USER_DATA,
-    PathMode.SYSTEM_TEMP,
+    PathMode.PROJ_ABSOLUTE,   # 1. 專案根 outputs/ / project root outputs/
+    PathMode.USER_DATA,       # 2. 使用者資料目錄（備用）/ user data dir (fallback)
+    PathMode.SYSTEM_TEMP,     # 3. 系統 TEMP（兜底，管線不中止）/ temp (pipeline never crashes)
 )
 
-# CI
-Waterfall.CI_ARTIFACT = Waterfall(
-    PathMode.PROJ_ABSOLUTE,
-    PathMode.CWD,
-    PathMode.SYSTEM_TEMP,
-)
+# ── Maximum compatibility / 最高相容性 ────────────────────────────────────
+#   依序嘗試所有六個定位點，適合跨環境的函式庫程式碼。
+#   Tries all six anchors in a sensible order — for cross-environment library code.
 
-# Universal
 Waterfall.UNIVERSAL = Waterfall(
-    PathMode.EXE_INNER,
-    PathMode.EXE_ABSOLUTE,
-    PathMode.PROJ_ABSOLUTE,
-    PathMode.CWD,
-    PathMode.USER_DATA,
-    PathMode.SYSTEM_TEMP,
+    PathMode.EXE_INNER,       # 1. MEIPASS（只有 PyInstaller 環境有效）/ MEIPASS (PyInstaller only)
+    PathMode.EXE_ABSOLUTE,    # 2. exe 旁 / beside exe
+    PathMode.PROJ_ABSOLUTE,   # 3. 專案根 / project root
+    PathMode.CWD,             # 4. 工作目錄 / cwd
+    PathMode.USER_DATA,       # 5. 使用者資料目錄 / user data dir
+    PathMode.SYSTEM_TEMP,     # 6. 系統 TEMP（兜底）/ system temp (last resort)
 )
+
+# ── Retired aliases / 退役別名 ────────────────────────────────────────────
+#   步驟與對應的 active preset 完全相同，僅保留以維持向下相容性。
+#   Steps are identical to the corresponding active preset; kept for back-compat only.
+#   新程式碼請改用 ETL_INPUT / PROD_WRITE。
+#   New code should use ETL_INPUT / PROD_WRITE directly.
+
+Waterfall.CI_ARTIFACT  = Waterfall.ETL_INPUT    # alias: PROJ_ABSOLUTE → CWD → SYSTEM_TEMP
+Waterfall.EXE_WRITE_SAFE = Waterfall.PROD_WRITE  # alias: EXE_ABSOLUTE → USER_DATA → SYSTEM_TEMP
+
+
+# ------------------------------------------------------------------ #
+#  PRESETS  ─  dict of ACTIVE (non-alias) presets                    #
+#  僅包含功能各異的正規 preset；alias 請直接用 Waterfall.<alias>       #
+# ------------------------------------------------------------------ #
+#  用途 / Usage:
+#    from isd_py_framework_sdk.path_manager import PRESETS
+#    for name, wf in PRESETS.items():
+#        path, trace = pm.get_with_trace("my_tag", wf)
+
+PRESETS: dict[str, "Waterfall"] = {
+    "DEV_STANDARD":         Waterfall.DEV_STANDARD,
+    "DEV_WITH_USER_CONFIG": Waterfall.DEV_WITH_USER_CONFIG,
+    "PROD_READ":            Waterfall.PROD_READ,
+    "PROD_WRITE":           Waterfall.PROD_WRITE,
+    "EXE_PREFER_BUNDLED":   Waterfall.EXE_PREFER_BUNDLED,
+    "EXE_OVERRIDE":         Waterfall.EXE_OVERRIDE,
+    "ETL_INPUT":            Waterfall.ETL_INPUT,
+    "ETL_OUTPUT":           Waterfall.ETL_OUTPUT,
+    "UNIVERSAL":            Waterfall.UNIVERSAL,
+}
 

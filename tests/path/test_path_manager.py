@@ -44,6 +44,7 @@ from isd_py_framework_sdk.path_manager import (
     SingletonPathManager,
     PathMode,
     Waterfall,
+    PRESETS,
     ResolveIntent,
     WaterfallTrace,
     Attempt,
@@ -405,18 +406,39 @@ class TestWaterfallIntent(unittest.TestCase):
 
 class TestWaterfallPresets(unittest.TestCase):
 
-    def test_all_presets_are_waterfall_instances(self):
-        presets = [
-            Waterfall.DEV_STANDARD, Waterfall.DEV_WITH_USER_CONFIG,
-            Waterfall.PROD_READ, Waterfall.PROD_WRITE,
-            Waterfall.EXE_PREFER_BUNDLED, Waterfall.EXE_WRITE_SAFE,
-            Waterfall.ETL_INPUT, Waterfall.ETL_OUTPUT,
-            Waterfall.CI_ARTIFACT, Waterfall.UNIVERSAL,
-        ]
-        for wf in presets:
-            with self.subTest(wf=wf):
+    def test_active_presets_are_waterfall_instances(self):
+        """驗證所有正規（非 alias）preset 均為 Waterfall 實例且至少有一步。
+        Verify all active (non-alias) presets are Waterfall instances with ≥1 step."""
+        from isd_py_framework_sdk.path_manager import PRESETS
+        self.assertGreaterEqual(len(PRESETS), 9, "Expected at least 9 active presets")
+        for name, wf in PRESETS.items():
+            with self.subTest(name=name):
                 self.assertIsInstance(wf, Waterfall)
                 self.assertGreater(len(wf.steps), 0)
+
+    def test_alias_ci_artifact_equals_etl_input(self):
+        """CI_ARTIFACT 是 ETL_INPUT 的 alias，步驟應完全相同。
+        CI_ARTIFACT is an alias for ETL_INPUT — steps must be identical."""
+        self.assertEqual(Waterfall.CI_ARTIFACT, Waterfall.ETL_INPUT)
+
+    def test_alias_exe_write_safe_equals_prod_write(self):
+        """EXE_WRITE_SAFE 是 PROD_WRITE 的 alias，步驟應完全相同。
+        EXE_WRITE_SAFE is an alias for PROD_WRITE — steps must be identical."""
+        self.assertEqual(Waterfall.EXE_WRITE_SAFE, Waterfall.PROD_WRITE)
+
+    def test_exe_override_steps_order(self):
+        """EXE_OVERRIDE 的步驟順序：EXE_ABSOLUTE → USER_CONFIG → EXE_INNER。
+        EXE_OVERRIDE steps: EXE_ABSOLUTE → USER_CONFIG → EXE_INNER."""
+        self.assertEqual(
+            Waterfall.EXE_OVERRIDE.steps,
+            (PathMode.EXE_ABSOLUTE, PathMode.USER_CONFIG, PathMode.EXE_INNER),
+        )
+
+    def test_exe_override_complement_of_exe_prefer_bundled(self):
+        """EXE_OVERRIDE 與 EXE_PREFER_BUNDLED 的第一步相反（兩者互補）。
+        EXE_OVERRIDE first step is EXE_ABSOLUTE; EXE_PREFER_BUNDLED first is EXE_INNER."""
+        self.assertEqual(Waterfall.EXE_PREFER_BUNDLED.steps[0], PathMode.EXE_INNER)
+        self.assertEqual(Waterfall.EXE_OVERRIDE.steps[0], PathMode.EXE_ABSOLUTE)
 
     def test_presets_repr(self):
         self.assertIn("→", repr(Waterfall.UNIVERSAL))
