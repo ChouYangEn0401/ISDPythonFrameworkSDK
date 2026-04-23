@@ -1621,28 +1621,77 @@ write_path = pm.get("result_xlsx", Waterfall.PROD_WRITE)
 ### 環境切換（anchor remap）
 
 一般情況下，從開發機搬到 PyInstaller 打包環境後，每個 `register()` 的 anchor 都得從
-`PROJ_ABSOLUTE` 改成 `EXE_INNER`。`remap_anchor()` 讓你在**不修改任何 `register()` 呼叫**的情況下完成切換：
+`PROJ_ABSOLUTE` 改成 `EXE_INNER`。`remap_anchor()` 讓你在**不修改任何 `register()` 呼叫**的情況下完成切換。
+
+#### 寫在哪裡？
+
+`remap_anchor()` 必須寫在 **`main.py` 的模組頂端**（`import` 之後、第一個 `pm.get()` 之前），
+**不是**寫在 `if __name__ == "__main__":` 裡面。
+
+> `if __name__ == "__main__":` 的作用是阻止這段程式碼在被 `import` 時執行；
+> 而 remap 必須在任何模組呼叫 `pm.get()` 之前生效——包含模組頂層的初始化程式碼。
+> 因為 `pm` 是 singleton，在 `main.py` 頂端設定一次就全域有效。
 
 ```python
+# main.py  ← 整個應用程式的唯一入口點
 import sys
+
 from isd_py_framework_sdk.path_manager import SingletonPathManager, PathMode
 
+# ① 取得 singleton，設定專案根與 app 名稱
 pm = SingletonPathManager()
+pm.set_proj_root(__file__, levels_up=1)   # main.py 在 src/ 下，往上一層是專案根
+pm.set_app_name("MyApp")
 
-# ── 開發期間正常寫法（不需改動）─────────────────────────────────────────
+# ② 如果在 PyInstaller 打包的 .exe 裡，把 PROJ_ABSOLUTE 重導到 MEIPASS
+#    這一行是「開發 ↔ 打包」切換的唯一改動點
+if getattr(sys, 'frozen', False):
+    pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.EXE_INNER)
+
+# ③ 其他所有模組的 register() 完全不需要動，照開發時的寫法即可
+#    （這些呼叫通常散落在各個模組的頂端，不一定在 main.py 裡）
 pm.register("icon",    "assets/icon.png",        PathMode.PROJ_ABSOLUTE)
 pm.register("schema",  "config/schema.json",     PathMode.PROJ_ABSOLUTE)
 pm.register("report",  "outputs/report.xlsx",    PathMode.PROJ_ABSOLUTE)
 
-# ── 打包後在 main.py 入口點加這一行，不需改其他任何地方 ─────────────────
-if getattr(sys, 'frozen', False):                    # 在 PyInstaller 執行檔內
-    pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.EXE_INNER)
-    # 之後所有 pm.get("icon") / pm.get("schema") 自動從 MEIPASS 讀取
+# ── 之後任何地方呼叫 pm.get() ──────────────────────────────────────────
+icon_path = pm.get("icon")
+# 開發機（非 frozen）：<proj_root>/assets/icon.png
+# 打包後（frozen）：   sys._MEIPASS/assets/icon.png
 
-# ── 其他地方的程式碼完全不需要動 ────────────────────────────────────────
-icon_path = pm.get("icon")     # dev: <proj>/assets/icon.png
-                               # exe: sys._MEIPASS/assets/icon.png
+
+def main():
+    # 應用程式主邏輯
+    ...
+
+
+if __name__ == "__main__":
+    main()
 ```
+
+#### 確保開發到打包都能正常運作
+
+`remap_anchor()` 解決的是**路徑解析**的問題。整個流程能 work 的前提還有：
+
+1. **PyInstaller 要知道哪些檔案要打包進去** — 路徑管理器負責找路徑，但它無法替你告訴
+   PyInstaller「這個 `assets/` 資料夾要放進 MEIPASS」。你仍需要在 `.spec` 或命令列加：
+   ```
+   --add-data "assets;assets"      # Windows
+   --add-data "assets:assets"      # macOS / Linux
+   ```
+2. **`set_proj_root()` 在 frozen 環境下仍可呼叫**，但因為 `PROJ_ABSOLUTE` 已被 remap
+   到 `EXE_INNER`，`_proj_root` 的值此時不再被用到，呼叫它不會造成問題。
+3. **有些路徑不應該被 remap**（例如輸出報表、log 檔）：
+   將這些寫入路徑的 anchor 改用 `PROD_WRITE` 相關的 PathMode（`EXE_ABSOLUTE` 或 `USER_DATA`），
+   或直接用 `PathMode.ABSOLUTE` 傳入完整絕對路徑，`remap_anchor()` 不影響 `ABSOLUTE` anchor。
+
+#### Waterfall 也受 remap 影響
+
+anchor remap 在底層的 `_apply_anchor()` 套用，waterfall 的每一步都經過它，
+所以 `DEV_STANDARD`（PROJ → CWD）的第一步在 `PROJ_ABSOLUTE → EXE_INNER` remap 生效後，
+會自動嘗試 `EXE_INNER` 而非 `PROJ_ABSOLUTE`，**不需要另外為 Waterfall 設定 remap**。
+
+#### 方法速查
 
 | 方法 | 說明 |
 |---|---|
