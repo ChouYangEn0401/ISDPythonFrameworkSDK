@@ -22,20 +22,13 @@ from isd_py_framework_sdk.path_manager import (
     PathMode,
     Waterfall,
     ResolveIntent,
+    PRESETS,         # 僅包含非重複 preset / non-alias presets only
 )
 
 
 def _waterfall_presets() -> dict:
-    """Return mapping name -> Waterfall preset available on Waterfall class."""
-    presets = {}
-    for name in dir(Waterfall):
-        if name.isupper():
-            val = getattr(Waterfall, name)
-            if isinstance(val, Waterfall):
-                presets[name] = val
-    # Add a custom universal option
-    presets["CUSTOM_UNIVERSAL"] = Waterfall.UNIVERSAL
-    return presets
+    """Return the package PRESETS dict (non-alias presets only)."""
+    return dict(PRESETS)
 
 
 class GUI:

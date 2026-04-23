@@ -1548,17 +1548,17 @@ path = pm.get("config", wf)
 
 **Active presets — 各具不同功能的正規 preset（每個步驟都不重複）**
 
-| Waterfall preset | 步驟（→ 順序） | 適合場景 |
+| Waterfall preset | 步驟（→ 優先順序） | 說明 |
 |---|---|---|
-| `DEV_STANDARD` | PROJ_ABSOLUTE → CWD | 日常開發讀取 |
-| `DEV_WITH_USER_CONFIG` | USER_CONFIG → PROJ_ABSOLUTE → CWD | 個人設定可覆蓋專案預設（dev tool） |
-| `PROD_READ` | PROJ_ABSOLUTE → EXE_ABSOLUTE → USER_CONFIG | 部署後讀取資源 / 設定 |
-| `PROD_WRITE` | EXE_ABSOLUTE → USER_DATA → SYSTEM_TEMP | 部署後寫入紀錄 / 輸出 |
-| `EXE_PREFER_BUNDLED` | EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE | PyInstaller — 內嵌資源優先，外部無法覆蓋 |
-| `EXE_OVERRIDE` | EXE_ABSOLUTE → USER_CONFIG → EXE_INNER | PyInstaller — 覆蓋模式：外部檔案可替換內嵌預設資源 |
-| `ETL_INPUT` | PROJ_ABSOLUTE → CWD → SYSTEM_TEMP | ETL 管線讀取輸入資料 |
-| `ETL_OUTPUT` | PROJ_ABSOLUTE → USER_DATA → SYSTEM_TEMP | ETL 管線寫入輸出（WRITE intent） |
-| `UNIVERSAL` | EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE → CWD → USER_DATA → SYSTEM_TEMP | 最高相容性，任環境通用 |
+| `DEV_STANDARD` | PROJ_ABSOLUTE → CWD | **讀取**。先看專案根目錄，找不到才退回 CWD。沒有 exe / user 資料夾感知，**不適合打包環境**；開發機日常讀取首選。 |
+| `DEV_WITH_USER_CONFIG` | USER_CONFIG → PROJ_ABSOLUTE → CWD | **讀取**。`~/.config/<app>` 可蓋過版控中的專案預設值；最終退路是 CWD。適合**不應版控**的本機設定（API key、DB DSN），讓個人本機設定覆蓋 repo 裡的預設值。 |
+| `PROD_READ` | PROJ_ABSOLUTE → EXE_ABSOLUTE → USER_CONFIG | **讀取**。安裝/部署目錄最優先，找不到再看 exe 旁邊的目錄，最後讀取使用者 AppData。允許系統管理員在 exe 旁放置**覆蓋設定**。部署後讀取靜態資源或設定檔的標準選擇。 |
+| `PROD_WRITE` | EXE_ABSOLUTE → USER_DATA → SYSTEM_TEMP | **寫入**（需搭配 `ResolveIntent.WRITE`）。優先寫到 exe 旁邊；若安裝目錄唯讀（如 `Program Files`）則退到 AppData；兜底 TEMP 確保**永遠可以寫入**。部署後輸出 log 或報表的標準選擇。 |
+| `EXE_PREFER_BUNDLED` | EXE_INNER (MEIPASS) → EXE_ABSOLUTE → PROJ_ABSOLUTE | **讀取**（PyInstaller — **唯讀資源模式**）。MEIPASS 內嵌資料永遠勝出；外部放同名檔案**也無法覆蓋**。適合 icon、字型、schema 等**不應被使用者替換**的靜態資源。 |
+| `EXE_OVERRIDE` | EXE_ABSOLUTE → USER_CONFIG → EXE_INNER (MEIPASS) | **讀取**（PyInstaller — **可客製化設定模式**）。exe 旁邊或 AppData 的外部檔案可蓋過 `.exe` 內嵌的預設值；讓部署後**現場替換設定，不需重新編譯**。與 `EXE_PREFER_BUNDLED` 互補。 |
+| `ETL_INPUT` | PROJ_ABSOLUTE → CWD → SYSTEM_TEMP | **讀取**。先找專案根 `data/inputs/`，退回 CWD，最後找 TEMP staging 區。**CI/CD 環境**中暫存於 TEMP 的輸入資料也能被找到，管線不因路徑問題中止。 |
+| `ETL_OUTPUT` | PROJ_ABSOLUTE → USER_DATA → SYSTEM_TEMP | **寫入**（需搭配 `ResolveIntent.WRITE`）。先寫到 `data/outputs/`，退到 AppData，兜底 TEMP。**管線永遠能寫出結果**，不因輸出目錄不可寫而中止。 |
+| `UNIVERSAL` | EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE → CWD → USER_DATA → SYSTEM_TEMP | **讀取**。依序嘗試六個定位點；不論**開發機、部署環境、PyInstaller** 哪種情境都能找到路徑。適合函式庫程式碼或執行環境不確定的場景，以相容性換取明確性。 |
 
 **Retired aliases — 步驟與上表重複，保留以維持向下相容，新程式碼請勿使用**
 
@@ -1617,6 +1617,40 @@ path = pm.get("config_file", Waterfall.EXE_OVERRIDE)
 # 寫入：先嘗試 exe 旁邊，退回 USER_DATA，最後用系統暫存
 write_path = pm.get("result_xlsx", Waterfall.PROD_WRITE)
 ```
+
+### 環境切換（anchor remap）
+
+一般情況下，從開發機搬到 PyInstaller 打包環境後，每個 `register()` 的 anchor 都得從
+`PROJ_ABSOLUTE` 改成 `EXE_INNER`。`remap_anchor()` 讓你在**不修改任何 `register()` 呼叫**的情況下完成切換：
+
+```python
+import sys
+from isd_py_framework_sdk.path_manager import SingletonPathManager, PathMode
+
+pm = SingletonPathManager()
+
+# ── 開發期間正常寫法（不需改動）─────────────────────────────────────────
+pm.register("icon",    "assets/icon.png",        PathMode.PROJ_ABSOLUTE)
+pm.register("schema",  "config/schema.json",     PathMode.PROJ_ABSOLUTE)
+pm.register("report",  "outputs/report.xlsx",    PathMode.PROJ_ABSOLUTE)
+
+# ── 打包後在 main.py 入口點加這一行，不需改其他任何地方 ─────────────────
+if getattr(sys, 'frozen', False):                    # 在 PyInstaller 執行檔內
+    pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.EXE_INNER)
+    # 之後所有 pm.get("icon") / pm.get("schema") 自動從 MEIPASS 讀取
+
+# ── 其他地方的程式碼完全不需要動 ────────────────────────────────────────
+icon_path = pm.get("icon")     # dev: <proj>/assets/icon.png
+                               # exe: sys._MEIPASS/assets/icon.png
+```
+
+| 方法 | 說明 |
+|---|---|
+| `pm.remap_anchor(from, to)` | 讓所有以 `from` 為 anchor 的 tag 改用 `to` 解析。重複呼叫會覆蓋前一個設定。 |
+| `pm.remove_anchor_remap(from)` | 移除指定 anchor 的 remap，恢復原始行為。不存在時不報錯。 |
+| `pm.clear_anchor_remaps()` | 移除全部 remap。 |
+
+> 目前已設定的 remap 會顯示在 `pm.info()` 的 `Anchor remaps` 區段，方便除錯。
 
 ### 存檔衝突處理
 

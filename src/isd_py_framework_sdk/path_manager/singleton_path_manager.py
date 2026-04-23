@@ -114,7 +114,7 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
         self._app_name: str = "app"
         self._proj_root: Optional[Path] = None
         self._registry: PathRegistry = PathRegistry()
-        
+        self._anchor_remaps: dict[PathMode, PathMode] = {}
         self._default_conflict_strategy: ConflictStrategy = IncrementSuffixStrategy()
         self._lock = threading.Lock()
 
@@ -146,6 +146,55 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
     def set_default_conflict_strategy(self, strategy: ConflictStrategy) -> None:
         """Replace the strategy used by ``resolve_conflict`` when no explicit one is given."""
         self._default_conflict_strategy = strategy
+
+    # ------------------------------------------------------------------ #
+    #  Anchor remapping                                                    #
+    # ------------------------------------------------------------------ #
+
+    def remap_anchor(self, from_mode: PathMode, to_mode: PathMode) -> None:
+        """
+        Globally redirect all tags registered under *from_mode* to resolve
+        against *to_mode* instead — without changing any ``register()`` call.
+
+        Typical use: one-line switch from dev layout to PyInstaller layout::
+
+            import sys
+            pm = SingletonPathManager()
+            if getattr(sys, 'frozen', False):
+                pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.EXE_INNER)
+
+        Every subsequent ``get()`` call for tags registered with
+        ``PROJ_ABSOLUTE`` will resolve against ``sys._MEIPASS`` instead of
+        the project root — no edits to ``register()`` calls required.
+
+        Calling again with the same *from_mode* silently overwrites the remap.
+        Remove with :meth:`remove_anchor_remap` or :meth:`clear_anchor_remaps`.
+
+        一行切換開發/打包環境，不需更改任何 register() 呼叫：:
+
+            if getattr(sys, 'frozen', False):
+                pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.EXE_INNER)
+        """
+        with self._lock:
+            self._anchor_remaps[from_mode] = to_mode
+
+    def remove_anchor_remap(self, from_mode: PathMode) -> None:
+        """
+        Remove the anchor remap for *from_mode*.  No-op if not set.
+
+        移除 *from_mode* 的 anchor remap；若未設定則不報錯。
+        """
+        with self._lock:
+            self._anchor_remaps.pop(from_mode, None)
+
+    def clear_anchor_remaps(self) -> None:
+        """
+        Remove ALL active anchor remaps.
+
+        清除所有 anchor remap。
+        """
+        with self._lock:
+            self._anchor_remaps.clear()
 
     def set_app_name(self, name: str) -> None:
         """
@@ -319,6 +368,13 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
         lines += [
             f"  system_temp : {EnvironmentResolver.system_temp_root()}",
             f"  cwd         : {EnvironmentResolver.cwd()}",
+        ]
+        if self._anchor_remaps:
+            lines.append("")
+            lines.append(f"  Anchor remaps ({len(self._anchor_remaps)} active):")
+            for frm, to in self._anchor_remaps.items():
+                lines.append(f"    {frm.name} → {to.name}")
+        lines += [
             "",
             f"  Registered tags ({len(self._registry.all_entries())}):",
         ]
@@ -413,8 +469,12 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
         *stored_path* → absolute Path.
 
         Used by both ``_to_absolute`` (registered anchor) and the waterfall
-        resolver (override anchor).
+        resolver (override anchor).  Respects any active anchor remaps.
         """
+        # Apply any global anchor remap installed by remap_anchor().
+        # 套用 remap_anchor() 安裝的全域重定向（若未設定則使用原始 anchor）。
+        anchor = self._anchor_remaps.get(anchor, anchor)
+
         if anchor == PathMode.ABSOLUTE:
             return stored_path.resolve()
 

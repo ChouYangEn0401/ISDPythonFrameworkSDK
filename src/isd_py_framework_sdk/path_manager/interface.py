@@ -148,6 +148,42 @@ class IPathManager(ABC):
     #  Conflict resolution                                                 #
     # ------------------------------------------------------------------ #
 
+    # ------------------------------------------------------------------ #
+    #  Anchor remapping                                                    #
+    # ------------------------------------------------------------------ #
+
+    @abstractmethod
+    def remap_anchor(self, from_mode: PathMode, to_mode: PathMode) -> None:
+        """
+        Globally redirect all tags registered under *from_mode* to resolve
+        against *to_mode* instead — without changing any ``register()`` call.
+
+        Typical use: enable PyInstaller compatibility at startup::
+
+            import sys
+            pm = SingletonPathManager()
+            if getattr(sys, 'frozen', False):
+                pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.EXE_INNER)
+
+        Calling again with the same *from_mode* silently overwrites the remap.
+        Remove with ``remove_anchor_remap`` or ``clear_anchor_remaps``.
+        """
+        ...
+
+    @abstractmethod
+    def remove_anchor_remap(self, from_mode: PathMode) -> None:
+        """Remove the anchor remap for *from_mode*.  No-op if not set."""
+        ...
+
+    @abstractmethod
+    def clear_anchor_remaps(self) -> None:
+        """Remove ALL active anchor remaps."""
+        ...
+
+    # ------------------------------------------------------------------ #
+    #  Conflict resolution                                                 #
+    # ------------------------------------------------------------------ #
+
     @abstractmethod
     def resolve_conflict(
         self,

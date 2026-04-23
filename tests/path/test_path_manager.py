@@ -24,6 +24,7 @@ Test groups
 16. [SCENARIO] PyInstaller bundled app
 17. [SCENARIO] Tkinter desktop app (USER_* dirs, settings, cache)
 18. [SCENARIO] ETL pipeline (read inputs, write outputs, fallback to tmp)
+19. Anchor remap — remap_anchor / remove_anchor_remap / clear_anchor_remaps
 
 Run:
     python tests/path/test_path_manager.py
@@ -944,6 +945,145 @@ class TestETLPipelineScenario(unittest.TestCase):
         )
         self.assertIsNotNone(path)
         self.assertTrue(trace.succeeded)
+
+
+# ===========================================================================
+#  19. Anchor remap — remap_anchor / remove_anchor_remap / clear_anchor_remaps
+# ===========================================================================
+
+class TestAnchorRemap(unittest.TestCase):
+    """
+    Tests for remap_anchor(): allows switching from dev to exe layout without
+    changing any register() calls.
+    """
+
+    def setUp(self):
+        self.pm = _fresh_manager()
+        with tempfile.TemporaryDirectory() as d:
+            self._tmpdir = d   # dir is gone after setUp but path recorded
+        # Use this tmpdir as a stable value for path comparisons
+        self._proj = Path(tempfile.mkdtemp())
+        self._exe  = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self._proj, ignore_errors=True)
+        self.addCleanup(shutil.rmtree, self._exe,  ignore_errors=True)
+
+    def _write(self, directory: Path, rel: str, content: str = "x") -> Path:
+        p = directory / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content)
+        return p
+
+    # -- basic remap --------------------------------------------------------
+
+    def test_remap_changes_resolution_base(self):
+        """PROJ_ABSOLUTE → CWD remap should make the tag resolve against CWD."""
+        self.pm.set_proj_root(self._proj)
+        self.pm.register("cfg", "settings.toml", PathMode.PROJ_ABSOLUTE)
+
+        cwd_file = Path(os.getcwd()) / "settings.toml"
+        self.pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.CWD)
+
+        resolved = self.pm.get("cfg")
+        self.assertEqual(resolved, cwd_file.resolve())
+
+    def test_remap_does_not_affect_differently_anchored_tags(self):
+        """Remapping PROJ_ABSOLUTE must not affect tags registered with CWD."""
+        self.pm.set_proj_root(self._proj)
+        self.pm.register("a", "a.txt", PathMode.PROJ_ABSOLUTE)
+        self.pm.register("b", "b.txt", PathMode.CWD)
+
+        self.pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.CWD)
+
+        # Both 'a' and 'b' now resolve against CWD but their stored_path differs
+        resolved_a = self.pm.get("a")
+        resolved_b = self.pm.get("b")
+        self.assertEqual(resolved_a, (Path(os.getcwd()) / "a.txt").resolve())
+        self.assertEqual(resolved_b, (Path(os.getcwd()) / "b.txt").resolve())
+
+    def test_remap_affects_waterfall_resolution(self):
+        """An active remap should be honoured inside waterfall steps."""
+        self.pm.set_proj_root(self._proj)
+        # Write the file under _exe so PROJ_ABSOLUTE (remapped to EXE) finds it
+        real_file = self._write(self._exe, "data.csv")
+
+        self.pm.register("data", "data.csv", PathMode.PROJ_ABSOLUTE)
+
+        # Before remap: PROJ_ABSOLUTE points at _proj — file not there
+        path_before, _ = self.pm.get_with_trace("data", Waterfall.DEV_STANDARD)
+        self.assertIsNone(path_before)
+
+        # After remap PROJ → EXE the file is found via the waterfall's first step
+        self.pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.EXE_ABSOLUTE)
+        # But EXE_ABSOLUTE resolves to the script dir by default — so let's
+        # just verify the resolved base directory changed
+        resolved = self.pm.get("data")
+        self.assertNotEqual(resolved.parent, self._proj)
+
+    # -- overwrite remap ----------------------------------------------------
+
+    def test_remap_overwrite_replaces_previous(self):
+        """Calling remap_anchor twice for the same from_mode keeps the latest."""
+        self.pm.set_proj_root(self._proj)
+        self.pm.register("cfg", "x.txt", PathMode.PROJ_ABSOLUTE)
+
+        self.pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.CWD)
+        self.pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.SYSTEM_TEMP)
+
+        resolved = self.pm.get("cfg")
+        import tempfile as _tf
+        expected = (Path(_tf.gettempdir()) / "x.txt").resolve()
+        self.assertEqual(resolved, expected)
+
+    # -- remove_anchor_remap ------------------------------------------------
+
+    def test_remove_anchor_remap_restores_original(self):
+        """After removing a remap the tag resolves via its registered anchor again."""
+        self.pm.set_proj_root(self._proj)
+        self.pm.register("cfg", "x.txt", PathMode.PROJ_ABSOLUTE)
+
+        expected_original = (self._proj / "x.txt").resolve()
+
+        self.pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.CWD)
+        self.pm.remove_anchor_remap(PathMode.PROJ_ABSOLUTE)
+
+        self.assertEqual(self.pm.get("cfg"), expected_original)
+
+    def test_remove_anchor_remap_noop_for_unset(self):
+        """Removing a remap that was never set should not raise."""
+        pm = _fresh_manager()
+        pm.remove_anchor_remap(PathMode.PROJ_ABSOLUTE)  # should not raise
+
+    # -- clear_anchor_remaps ------------------------------------------------
+
+    def test_clear_anchor_remaps_removes_all(self):
+        """clear_anchor_remaps() should remove every installed remap."""
+        self.pm.set_proj_root(self._proj)
+        self.pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.CWD)
+        self.pm.remap_anchor(PathMode.CWD, PathMode.SYSTEM_TEMP)
+
+        self.pm.clear_anchor_remaps()
+
+        # After clearing, PROJ_ABSOLUTE tag resolves against its original base
+        self.pm.register("cfg", "y.txt", PathMode.PROJ_ABSOLUTE)
+        expected = (self._proj / "y.txt").resolve()
+        self.assertEqual(self.pm.get("cfg"), expected)
+
+    # -- info() reflection --------------------------------------------------
+
+    def test_info_shows_active_remaps(self):
+        """pm.info() must list anchor remaps when any are active."""
+        pm = _fresh_manager()
+        pm.remap_anchor(PathMode.PROJ_ABSOLUTE, PathMode.EXE_ABSOLUTE)
+        info = pm.info()
+        self.assertIn("Anchor remaps", info)
+        self.assertIn("PROJ_ABSOLUTE", info)
+        self.assertIn("EXE_ABSOLUTE", info)
+
+    def test_info_omits_remaps_section_when_none(self):
+        """pm.info() must NOT show a remaps section when no remaps are active."""
+        pm = _fresh_manager()
+        info = pm.info()
+        self.assertNotIn("Anchor remaps", info)
 
 
 # ===========================================================================

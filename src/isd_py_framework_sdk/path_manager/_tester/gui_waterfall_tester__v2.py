@@ -26,6 +26,7 @@ from isd_py_framework_sdk.path_manager import (
     PathMode,
     Waterfall,
     ResolveIntent,
+    PRESETS,         # 僅包含非重複 preset / non-alias presets only
 )
 
 # ── Colour palette (Catppuccin Mocha) ────────────────────────────────────────
@@ -48,42 +49,57 @@ _TITLE = ("Segoe UI", 14, "bold")
 _MONO  = ("Consolas", 10)
 
 # ── Pre-built waterfall index ─────────────────────────────────────────────────
-PRESETS: dict[str, Waterfall] = dict(sorted(
-    {n: getattr(Waterfall, n) for n in dir(Waterfall)
-     if n.isupper() and isinstance(getattr(Waterfall, n), Waterfall)}.items()
-))
+# 直接使用套件匯出的 PRESETS dict（僅非重複 preset，不含 alias）。
+# Use the package-level PRESETS dict (non-alias presets only).
+# PRESETS 已從 isd_py_framework_sdk.path_manager 匯入 / imported above.
 
 WF_TIPS: dict[str, str] = {
     "DEV_STANDARD":
-        "PROJ_ABSOLUTE → CWD\n"
-        "Standard dev-machine reading — project root first, then current working dir.",
+        "[開發-讀取] PROJ_ABSOLUTE → CWD\n"
+        "日常開發讀取：優先專案根，找不到退回 CWD。\n"
+        "Daily dev reading: project root first, then cwd.",
     "DEV_WITH_USER_CONFIG":
-        "USER_CONFIG → PROJ_ABSOLUTE → CWD\n"
-        "Dev tools that honour ~/.config overrides first (personal API keys, credentials).",
+        "[開發-個人覆蓋] USER_CONFIG → PROJ_ABSOLUTE → CWD\n"
+        "個人設定（~/.config/<app>）可覆蓋專案預設值，適合存放 API key 等敏感資訊。\n"
+        "Personal config overrides project defaults — useful for local API keys.",
     "PROD_READ":
-        "PROJ_ABSOLUTE → EXE_ABSOLUTE → USER_CONFIG\n"
-        "Deployed app reading config, assets, or reference data.",
+        "[部署-讀取] PROJ_ABSOLUTE → EXE_ABSOLUTE → USER_CONFIG\n"
+        "部署後讀取資源/設定：先找專案根，再找 exe 旁，最後找 USER_CONFIG。\n"
+        "Deployed app reading assets or config.",
     "PROD_WRITE":
-        "EXE_ABSOLUTE → USER_DATA → SYSTEM_TEMP\n"
-        "Deployed app writing logs, outputs, or cached results.",
+        "[部署-寫入] EXE_ABSOLUTE → USER_DATA → SYSTEM_TEMP\n"
+        "部署後寫入紀錄/輸出：先試 exe 旁，再試 USER_DATA，最後退到系統 TEMP。\n"
+        "Deployed app writing logs or outputs.",
     "EXE_PREFER_BUNDLED":
-        "EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE\n"
-        "PyInstaller: prefer data bundled inside the exe (MEIPASS), then beside it.",
-    "EXE_WRITE_SAFE":
-        "EXE_ABSOLUTE → USER_DATA → SYSTEM_TEMP\n"
-        "PyInstaller writing output — never tries to write into the frozen bundle.",
+        "[PyInstaller-內嵌優先] EXE_INNER(MEIPASS) → EXE_ABSOLUTE → PROJ_ABSOLUTE\n"
+        "內嵌資源（MEIPASS）最優先——外部檔案無法覆蓋。\n"
+        "Bundled data wins; external files cannot override.",
+    "EXE_OVERRIDE":
+        "[PyInstaller-覆蓋模式] EXE_ABSOLUTE → USER_CONFIG → EXE_INNER(MEIPASS)\n"
+        "exe 旁的外部檔案 > USER_CONFIG > 最後才讀 MEIPASS 內嵌預設資源。\n"
+        "Allows patching a deployed app by placing a file beside the exe "
+        "without recompiling.",
     "ETL_INPUT":
-        "PROJ_ABSOLUTE → CWD → SYSTEM_TEMP\n"
-        "ETL pipeline: find source data in project, then cwd, then staging temp dir.",
+        "[ETL-輸入] PROJ_ABSOLUTE → CWD → SYSTEM_TEMP\n"
+        "ETL 管線尋找輸入資料：先找專案根，退回 CWD，最後退到 TEMP staging 區。\n"
+        "ETL pipeline input: project root → cwd → staging temp.",
     "ETL_OUTPUT":
-        "PROJ_ABSOLUTE → USER_DATA → SYSTEM_TEMP\n"
-        "ETL pipeline: write results to project output, then user data, last resort temp.",
-    "CI_ARTIFACT":
-        "PROJ_ABSOLUTE → CWD → SYSTEM_TEMP\n"
-        "CI pipeline artefacts: workspace root → cwd → temp artefact dir.",
+        "[ETL-輸出·WRITE intent] PROJ_ABSOLUTE → USER_DATA → SYSTEM_TEMP\n"
+        "ETL 管線寫出結果：優先寫到專案根 outputs/，再退到 USER_DATA，最後 TEMP。\n"
+        "ETL pipeline output: project root → user data → temp.",
     "UNIVERSAL":
-        "EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE → CWD → USER_DATA → SYSTEM_TEMP\n"
-        "Maximum compatibility — tries every location in a sensible order.",
+        "[最高相容性] EXE_INNER → EXE_ABSOLUTE → PROJ_ABSOLUTE → CWD → USER_DATA → SYSTEM_TEMP\n"
+        "依序嘗試全部六個定位點——適合需要跨環境運作的函式庫程式碼。\n"
+        "Tries all six anchors in order — for cross-environment library code.",
+    # ── aliases（顯示在 batch 頁時仍可見，但 PRESETS 中不包含）
+    "CI_ARTIFACT":
+        "[alias = ETL_INPUT] PROJ_ABSOLUTE → CWD → SYSTEM_TEMP\n"
+        "CI 管線產出物（步驟與 ETL_INPUT 完全相同，為向下相容保留）。\n"
+        "Alias for ETL_INPUT — kept for back-compat only.",
+    "EXE_WRITE_SAFE":
+        "[alias = PROD_WRITE] EXE_ABSOLUTE → USER_DATA → SYSTEM_TEMP\n"
+        "PyInstaller 安全寫出（步驟與 PROD_WRITE 完全相同，為向下相容保留）。\n"
+        "Alias for PROD_WRITE — kept for back-compat only.",
 }
 
 PM_TIPS: dict[str, str] = {
