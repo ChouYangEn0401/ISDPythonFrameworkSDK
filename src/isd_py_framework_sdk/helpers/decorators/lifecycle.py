@@ -13,8 +13,9 @@ import warnings
 
 def old_method(reason: str = ""):
     """
-    Mark a function as deprecated.
-    Issues a ``OldWarning`` on every call.
+    Mark a function as old_version, and may be removed in future versions.
+    Also, mark developers to consider merging it with other functions if significant overlap exists.
+    Issues a ``OldFuncWarning`` on every call.
 
     :param reason: Explanation or replacement suggestion.
 
@@ -31,7 +32,7 @@ def old_method(reason: str = ""):
             msg = f"Function {func.__name__!r} is old method, and may be removed/merged in future versions."
             if reason:
                 msg += f" {reason}"
-            warnings.warn(msg, category=OldWarning, stacklevel=2)
+            warnings.warn(msg, category=OldFuncWarning, stacklevel=2)
             return func(*args, **kwargs)
 
         return wrapper
