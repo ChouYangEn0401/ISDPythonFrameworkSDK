@@ -11,6 +11,14 @@ import functools
 import warnings
 
 
+class TestFuncWarning(UserWarning):
+    """Issued when a function marked with @test_func is called."""
+
+
+class OldFuncWarning(UserWarning):
+    """Issued when a function marked with @old_method is called."""
+
+
 def test_func(reason: str = ""):
     """
     Mark a function as under testing, and may be changed or removed in future versions.
