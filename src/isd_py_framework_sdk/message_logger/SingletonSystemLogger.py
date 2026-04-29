@@ -1,5 +1,5 @@
 from isd_py_framework_sdk.base.Singleton import SingletonMetaclass
-from isd_py_framework_sdk.message_logger.logger import LoggerBase
+from isd_py_framework_sdk.message_logger.base.LoggerBase import LoggerBase
 
 
 class SingletonSystemLogger(LoggerBase, metaclass=SingletonMetaclass):

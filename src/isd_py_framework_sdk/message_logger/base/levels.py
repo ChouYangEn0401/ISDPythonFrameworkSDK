@@ -2,7 +2,7 @@
 Log level definitions (moved from `enum.py` to avoid shadowing stdlib `enum`).
 Contains `LogLevelLiteral` and `LevelOrder` used by adapters/logger.
 """
-from typing import Optional, Literal, TYPE_CHECKING
+from typing import Literal
 
 LogLevelLiteral = Literal[
     "DEBUG", 

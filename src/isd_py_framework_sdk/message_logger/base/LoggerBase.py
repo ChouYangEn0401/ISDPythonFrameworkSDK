@@ -3,10 +3,11 @@ from datetime import datetime
 from typing import List
 
 from colorama import init as colorama_init
-from isd_py_framework_sdk.message_logger.levels import LogLevelLiteral, LevelOrder
-
 colorama_init()
 _CURRENT_RUN_MODE = os.environ.get("RUN_MODE", "DEBUG")
+
+from isd_py_framework_sdk.message_logger.adapters import LoggerAdapterBase
+from isd_py_framework_sdk.message_logger.base.levels import LogLevelLiteral, LevelOrder
 
 
 class LoggerBase:
@@ -35,11 +36,11 @@ class LoggerBase:
 
     # --- Adapter 管理 ---------------------------------------------------------
 
-    def register_adapter(self, adapter) -> None:
+    def register_adapter(self, adapter: LoggerAdapterBase) -> None:
         """新增一個輸出 adapter。"""
         self._adapters.append(adapter)
 
-    def unregister_adapter(self, adapter) -> None:
+    def unregister_adapter(self, adapter: LoggerAdapterBase) -> None:
         """移除指定 adapter。"""
         self._adapters.remove(adapter)
 

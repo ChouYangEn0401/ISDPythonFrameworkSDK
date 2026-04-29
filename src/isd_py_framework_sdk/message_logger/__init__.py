@@ -1,4 +1,4 @@
-from .levels import LogLevelLiteral, LevelOrder
+from .base.levels import LogLevelLiteral, LevelOrder
 from .adapters import (
     LoggerAdapterBase,
     TerminalAdapter,
@@ -9,7 +9,7 @@ from .adapters import (
     DarkThemeTkinterAdapter,
     LightThemeTkinterAdapter,
 )
-from .logger import LoggerBase
+from .base.LoggerBase import LoggerBase
 from .SingletonSystemLogger import SingletonSystemLogger
 
 __all__ = [
