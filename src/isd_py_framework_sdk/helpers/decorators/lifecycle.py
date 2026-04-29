@@ -11,6 +11,34 @@ import functools
 import warnings
 
 
+def test_func(reason: str = ""):
+    """
+    Mark a function as under testing, and may be changed or removed in future versions.
+    Also, mark developers to consider merging it with other functions if significant overlap exists.
+    Issues a ``TestFuncWarning`` on every call.
+
+    :param reason: Explanation or replacement suggestion.
+
+    e.g.::
+
+        @test_func("This Function Is Still Under Testing.")
+        def old_func(x):
+            return x + 1
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            msg = f"Function {func.__name__!r} is still under testing."
+            if reason:
+                msg += f" {reason}"
+            warnings.warn(msg, category=TestFuncWarning, stacklevel=2)
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
 def old_method(reason: str = ""):
     """
     Mark a function as old_version, and may be removed in future versions.
