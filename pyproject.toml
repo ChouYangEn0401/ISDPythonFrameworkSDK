@@ -58,7 +58,30 @@ file_compare = [
     "pyyaml>=6.0",
 ]
 
-# All-including convenience (dev + file_compare + message_logger)
+# Unified IO — core (CSV / JSON, no heavy backends)
+unified_io = [
+    "pandas>=2.0",
+]
+
+# Unified IO — Excel backend
+"unified_io.excel" = [
+    "pandas>=2.0",
+    "openpyxl>=3.1",
+]
+
+# Unified IO — SQL backend
+"unified_io.sql" = [
+    "pandas>=2.0",
+    "sqlalchemy>=2.0",
+]
+
+# Excel visual-formatting module
+excel_painter = [
+    "openpyxl>=3.1",
+    "wcwidth>=0.2",
+]
+
+# All-including convenience (dev + file_compare + message_logger + unified_io + excel_painter)
 all = [
     "pytest>=7.0",
     "black>=24.0",
@@ -66,6 +89,8 @@ all = [
     "pandas>=2.0",
     "pyyaml>=6.0",
     "colorama>=0.4.6",
+    "sqlalchemy>=2.0",
+    "wcwidth>=0.2",
 ]
 
 [project.scripts]
