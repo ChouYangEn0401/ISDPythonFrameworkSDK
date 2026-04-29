@@ -1,3 +1,13 @@
+"""
+unified_io._interface
+=====================
+Abstract base classes for the unified IO adapter pattern.
+
+Every concrete IO adapter must implement :class:`IIOAdapter`, which
+combines a :class:`IReader` and a :class:`IWriter`.  The two separate
+interfaces are also available for adapters that are intentionally
+read-only or write-only.
+"""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
