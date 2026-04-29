@@ -7,8 +7,18 @@ colorama_init()
 
 from .LoggerAdapterBase import LoggerAdapterBase
 from .levels import LogLevelLiteral, LevelOrder
+
+# 全域 RUN_MODE：控制最低可通過的等級門檻
+# DEBUG   → 全部等級通過（預設）
+# DISPLAY → INFO 以上
+# RUN     → 僅 ERROR 以上（生產模式）
+_RUN_MODE_FILTER: dict[str, str] = {
+    "DEBUG":   "DEBUG",
+    "DISPLAY": "INFO",
+    "RUN":     "ERROR",
+}
 _CURRENT_RUN_MODE = os.environ.get("RUN_MODE", "DEBUG").upper()
-_GLOBAL_MIN_LEVEL = NONE
+_GLOBAL_MIN_LEVEL = _RUN_MODE_FILTER.get(_CURRENT_RUN_MODE, "DEBUG")
 
 
 class LoggerBase:
@@ -109,3 +119,14 @@ class LoggerBase:
     def error(self, msg: str) -> None:      self.log(msg, "ERROR")
     def critical(self, msg: str) -> None:   self.log(msg, "CRITICAL")
     def highlight(self, msg: str) -> None:  self.log(msg, "HIGHLIGHT")
+
+    # --- Flush ---------------------------------------------------------------
+
+    def flush_all(self) -> None:
+        """Flush 所有已註冊的 adapter（例如 FileAdapter flush 至磁碟、TkinterAdapter 更新 widget）。"""
+        for adapter in self._adapters:
+            adapter.flush()
+
+    def flush(self) -> None:
+        """Alias for flush_all()。"""
+        self.flush_all()

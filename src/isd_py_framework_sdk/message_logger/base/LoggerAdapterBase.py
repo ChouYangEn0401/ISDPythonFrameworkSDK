@@ -27,6 +27,10 @@ class LoggerAdapterBase(ABC):
         if self._have_level(level, b_stop_when_error=True):
             self.level_filter = level
 
+    def flush(self) -> None:
+        """Flush any buffered output. Override in adapters that buffer output (e.g. FileAdapter, TkinterAdapter)."""
+        pass
+
     # --- Utility -------------------------------------------------------------
 
     @staticmethod
