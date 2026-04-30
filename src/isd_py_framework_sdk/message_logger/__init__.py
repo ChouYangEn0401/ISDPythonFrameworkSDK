@@ -16,6 +16,8 @@ message_logger — 結構化多 adapter 日誌套件
     LightThemeTkLabelAdapter    Tkinter tk.Label（淺色主題）
     DarkThemeTtkLabelAdapter    Tkinter ttk.Label（深色主題）
     LightThemeTtkLabelAdapter   Tkinter ttk.Label（淺色主題）
+    LocalHTTPAdapter           本機/遠端 HTTP JSON POST（MVP）
+    QueuedSocketAdapter        非阻塞 queue + worker socket 骨架
     HTMLAdapter                 HTML 輸出 stub
     HTTPAdapter                 HTTP 遠端輸出 stub
     DBAdapter                   資料庫輸出 stub
@@ -43,6 +45,8 @@ from .adapters import (
     TtkLabelAdapter,
     DarkThemeTtkLabelAdapter,
     LightThemeTtkLabelAdapter,
+    LocalHTTPAdapter,
+    QueuedSocketAdapter,
     HTMLAdapter,
     HTTPAdapter,
     DBAdapter,
@@ -76,6 +80,9 @@ __all__ = [
     # adapters (concrete — ttk.Label)
     "DarkThemeTtkLabelAdapter",
     "LightThemeTtkLabelAdapter",
+    # adapters (concrete — remote)
+    "LocalHTTPAdapter",
+    "QueuedSocketAdapter",
     # adapters (stub)
     "HTMLAdapter",
     "HTTPAdapter",

@@ -18,9 +18,14 @@ adapters.py — 所有內建 Adapter 實作
 """
 from __future__ import annotations
 
+import json
+import queue
+import socket
 import threading
 from abc import ABC
 from pathlib import Path
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from colorama import Fore, Style
 
@@ -433,6 +438,166 @@ class LightThemeTtkLabelAdapter(TtkLabelAdapter):
 # ─────────────────────────────────────────────────────────────────────────────
 # Network / Remote Stub Adapters
 # ─────────────────────────────────────────────────────────────────────────────
+
+class LocalHTTPAdapter(LoggerAdapterBase):
+    """
+    MVP: 將日誌以 JSON POST 傳送到本機（或指定）HTTP endpoint。
+
+    設計重點：
+    - 保持與既有 logger 架構一致：繼承 LoggerAdapterBase、實作 broadcast。
+    - 預設 fail-safe：網路錯誤不向上拋出，避免影響主流程。
+    - 僅使用標準函式庫 urllib，避免新增外部依賴。
+    """
+
+    def __init__(
+        self,
+        LEVEL_FILTER: LogLevelLiteral,
+        endpoint_url: str = "http://127.0.0.1:8000/logs",
+        *,
+        timeout: float = 0.5,
+        fail_silently: bool = True,
+        include_formatted: bool = True,
+        **kwargs,
+    ):
+        super().__init__(LEVEL_FILTER, **kwargs)
+        self._endpoint_url = endpoint_url
+        self._timeout = timeout
+        self._fail_silently = fail_silently
+        self._include_formatted = include_formatted
+        self.last_error: Exception | None = None
+
+    def _make_payload(self, level: str, formatted: str, shine: bool) -> dict:
+        payload = {
+            "level": level,
+            "shine": shine,
+        }
+        if self._include_formatted:
+            payload["formatted"] = formatted
+        return payload
+
+    def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
+        level = self.level_formator(level)
+        if not self._pass_filter(level):
+            return
+
+        payload = self._make_payload(level, formatted, shine)
+        raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib_request.Request(
+            self._endpoint_url,
+            data=raw,
+            headers={"Content-Type": "application/json; charset=utf-8"},
+            method="POST",
+        )
+        try:
+            with urllib_request.urlopen(req, timeout=self._timeout) as resp:
+                _ = resp.read()
+        except (urllib_error.URLError, urllib_error.HTTPError, TimeoutError, OSError) as exc:
+            self.last_error = exc
+            if not self._fail_silently:
+                raise
+
+
+class QueuedSocketAdapter(LoggerAdapterBase):
+    """
+    簡易 Socket adapter（方案二的可擴充骨架）。
+
+    目前提供：
+    - 背景 worker + queue（避免在 broadcast 阻塞主流程）
+    - 支援 UDP / TCP（以 JSON line 傳送）
+    - flush() / close() 生命週期接口
+
+    後續可擴充方向：
+    - asyncio event loop + persistent TCP connection + reconnect/backoff
+    - drop policy（queue 滿時丟棄策略）
+    - batching 與 ack/retry
+    """
+
+    def __init__(
+        self,
+        LEVEL_FILTER: LogLevelLiteral,
+        host: str = "127.0.0.1",
+        port: int = 9020,
+        *,
+        protocol: str = "udp",
+        max_queue_size: int = 1000,
+        fail_silently: bool = True,
+        **kwargs,
+    ):
+        super().__init__(LEVEL_FILTER, **kwargs)
+        self._host = host
+        self._port = port
+        self._protocol = protocol.lower()
+        if self._protocol not in {"udp", "tcp"}:
+            raise ValueError("protocol must be 'udp' or 'tcp'")
+        self._fail_silently = fail_silently
+        self._queue: queue.Queue[tuple[str, str, bool]] = queue.Queue(maxsize=max_queue_size)
+        self._stop_event = threading.Event()
+        self.last_error: Exception | None = None
+        self.dropped_count = 0
+        self._worker = threading.Thread(target=self._run_worker, name="QueuedSocketAdapterWorker", daemon=True)
+        self._worker.start()
+
+    def _encode_line(self, level: str, formatted: str, shine: bool) -> bytes:
+        payload = {
+            "level": level,
+            "formatted": formatted,
+            "shine": shine,
+        }
+        return (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
+
+    def _send_udp(self, line: bytes) -> None:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.sendto(line, (self._host, self._port))
+
+    def _send_tcp(self, line: bytes) -> None:
+        with socket.create_connection((self._host, self._port), timeout=1.0) as conn:
+            conn.sendall(line)
+
+    def _run_worker(self) -> None:
+        while not self._stop_event.is_set() or not self._queue.empty():
+            try:
+                level, formatted, shine = self._queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+
+            try:
+                line = self._encode_line(level, formatted, shine)
+                if self._protocol == "tcp":
+                    self._send_tcp(line)
+                else:
+                    self._send_udp(line)
+            except OSError as exc:
+                self.last_error = exc
+                if not self._fail_silently:
+                    raise
+            finally:
+                self._queue.task_done()
+
+    def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
+        level = self.level_formator(level)
+        if not self._pass_filter(level):
+            return
+        try:
+            self._queue.put_nowait((level, formatted, shine))
+        except queue.Full:
+            self.dropped_count += 1
+            if not self._fail_silently:
+                raise
+
+    def flush(self) -> None:
+        self._queue.join()
+
+    def close(self, wait_timeout: float = 1.0) -> None:
+        if self._stop_event.is_set():
+            return
+        self._stop_event.set()
+        self._worker.join(timeout=wait_timeout)
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
 from ..helpers.decorators.lifecycle import test_func  # noqa: E402
 
