@@ -1,18 +1,17 @@
+import datetime
 import functools
 import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import datetime
-from statistics import mean
-from typing import Optional, Union
-import datetime
-import time
 import sys
-import io
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from statistics import mean
+from typing import Optional
 
-from src.hyper_framework.monitor.logging.console import ConsoleLogger, ConsoleColorProvider
-from src.hyper_framework.monitor.logging.base import ColorLoggerBase, ColorProvider
+from isd_py_framework_sdk.message_logger import (
+    DarkThemeTerminalAdapter,
+    LogLevelLiteral,
+    SingletonSystemLogger,
+)
 
 ### --- 主物件 --- ###
 class LoopedFunctionTimer:
@@ -36,8 +35,8 @@ class LoopedFunctionTimer:
         self,
         total: Optional[int] = None,
         inline: bool = True,
-        color: ColorProvider.ColorLiteral = "reset",
-        logger: Optional[ColorLoggerBase] = None,
+        level: LogLevelLiteral = "INFO",
+        logger: Optional[SingletonSystemLogger] = None,
     ):
         self._total = total
         self.reset()
@@ -46,10 +45,16 @@ class LoopedFunctionTimer:
         self._time_records = []
         self._total_time = 0
         self._inline = inline
-        self._color = color
+        self._level = level
         self._last_processed = 0
 
-        self.logger = logger or ConsoleLogger()
+        # 進度列印節流：避免每次迴圈都輸出造成大量 I/O。
+        self.update_interval = max(1, min(int(self._total * 0.01) if self._total else 10000, 10000))
+
+        self.logger = logger or SingletonSystemLogger()
+        # 若外部已配置 adapter，沿用現有設定；否則提供預設終端輸出。
+        if not self.logger._adapters:
+            self.logger.register_adapter(DarkThemeTerminalAdapter("DEBUG"))
 
     def __enter__(self):
         self.start()
@@ -111,7 +116,8 @@ class LoopedFunctionTimer:
         inline: Optional[bool] = None,
         bar: bool = False,
         bar_len: int = 30,
-        color: Optional[ColorProvider.ColorLiteral] = None,
+        level: Optional[LogLevelLiteral] = None,
+        force: bool = False,
     ):
         total = total or self._total
         inline = self._inline if inline is None else inline
@@ -127,54 +133,52 @@ class LoopedFunctionTimer:
             else "N/A"
         )
 
-        # 取得顏色代碼
-        active_color = color or self._color or "reset"
-        if self.logger.color_provider:
-            fg_code = self.logger.color_provider.get_color_code(active_color)
-            gray_code = self.logger.color_provider.get_color_code("gray")
-            reset_code = self.logger.color_provider.get_color_code("reset")
-        else:
-            fg_code = gray_code = reset_code = ""
+        if not force and processed != total:
+            if processed - self._last_processed < self.update_interval:
+                return
+        self._last_processed = processed
+
+        active_level = level or self._level
 
         # 繪製進度條或普通訊息
         if bar:
             ratio = min(max(processed / total, 0), 1)
             filled_len = int(bar_len * ratio)
-            bar_str = f"{fg_code}{'█' * filled_len}{gray_code}{'░' * (bar_len - filled_len)}{reset_code}"
+            bar_str = f"{'#' * filled_len}{'-' * (bar_len - filled_len)}"
             text = f"[{bar_str}] {processed:>3,}/{total:<3,} TRT={self._total_time:.3f}s ETA={eta_str}"
         else:
             text = f"Progress: {processed:12.0f}/{total}, TRT={self._total_time:.3f}s, ETA={eta_str}"
 
         # 輸出（inline 或換行）
         if inline:
-            self.logger.overwrite(text, color=active_color)
+            sys.stdout.write("\r" + text)
+            sys.stdout.flush()
+            if processed == total:
+                sys.stdout.write("\n")
         else:
-            self.logger.write(text, color=active_color)
+            self.logger.log(text, active_level)
 
     def last_msg(
         self,
         inline: Optional[bool] = None,
         bar: bool = False,
         bar_len: int = 30,
-        color: Optional[ColorProvider.ColorLiteral] = None,
+        level: Optional[LogLevelLiteral] = None,
     ):
         """輸出最終進度條"""
-        active_color = color or self._color
-        self.msg(self._total, self._total, inline, bar, bar_len, active_color)
+        self.msg(self._total, self._total, inline, bar, bar_len, level, force=True)
 
     def end_msg(self):
-        self.logger.write("\n✅ DONE !!", color=self._color or "green")
+        self.logger.success("DONE")
 
     def show_info(
             self,
-            color: Optional[ColorProvider.ColorLiteral] = "reset",
             b_clean_progress_bar = False
     ):
         """顯示任務總結資訊"""
-        active_color = color or self._color
-
         if b_clean_progress_bar:
-            self.logger.overwrite(" " * 100, color=active_color)
+            sys.stdout.write("\r" + " " * 120 + "\r")
+            sys.stdout.flush()
 
         if self.avg:
             msg = (
@@ -187,8 +191,8 @@ class LoopedFunctionTimer:
                 f"總耗時: {self.sum:.3f}s, 平均單次耗時: N/A"
             )
 
-        self.logger.write(msg, color=active_color)
-        self.logger.write("-" * 50, color=active_color)
+        self.logger.info(msg)
+        self.logger.info("-" * 50)
         self.logger.flush()  # 在整個程序結束前，再次清空輸出緩衝區
 
 ### --- 主物件(多工專用) --- ###
@@ -201,10 +205,10 @@ class MultiProcessLoopedFunctionTimer(LoopedFunctionTimer):
     def __init__(
             self, total: int = None,
             inline: bool = True,
-            color: str = "reset",
-            logger: Optional[ColorLoggerBase] = None,
+            level: LogLevelLiteral = "INFO",
+            logger: Optional[SingletonSystemLogger] = None,
     ):
-        super().__init__(total, inline, color, logger)
+        super().__init__(total, inline, level, logger)
         self._processed_count = 0
         # 設置更新閾值 (為了性能，我們保留這個機制)
         self._last_update_count = 0
@@ -315,7 +319,7 @@ def func(x):
 ### --- 各種單元測試 --- ###
 def unit_test__single_thread():
     total = 100
-    timer = LoopedFunctionTimer(total=total, inline=True, color='yellow')
+    timer = LoopedFunctionTimer(total=total, inline=True, level="CHECKPOINT")
 
     print(f"<<< 啟動 LoopTimer 單進程任務 (Total Tasks: {total}) >>>")
     for i in range(total):
@@ -366,7 +370,7 @@ def unit_test__multiprocess():
     TOTAL_ITEMS = 10000
     MAX_WORKERS = os.cpu_count() or 4
     # 2. 初始化計時器
-    multi_timer = MultiProcessLoopedFunctionTimer(total=TOTAL_ITEMS, inline=True, color='cyan')
+    multi_timer = MultiProcessLoopedFunctionTimer(total=TOTAL_ITEMS, inline=True, level="CHECKPOINT")
 
     # 3. 使用 ProcessPoolExecutor 實作動態調度
     print(f"<<< 啟動 MultiLoopTimer 多工進度條 (Workers: {MAX_WORKERS}, Total Tasks: {TOTAL_ITEMS}) >>>")
@@ -378,10 +382,10 @@ def unit_test__multiprocess():
         multi_timer.start()
         for future in as_completed(futures):
             try:
-                m_result = future.result()  # 獲取任務結果，這一步是同步的 (相當於 'wait join' 或 'async 等候任務完成')
+                future.result()  # 獲取任務結果，這一步是同步的 (相當於 'wait join' 或 'async 等候任務完成')
                 multi_timer.task_completed(b_show_msg=True, bar=True)
             except Exception as e:
-                print(f"\n[Error] Task failed: {e}")
+                multi_timer.logger.error(f"Task failed: {e}")
         multi_timer.stop()
 
     # 4. 輸出最終結果
