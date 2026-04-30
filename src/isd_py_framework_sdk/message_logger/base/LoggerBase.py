@@ -37,6 +37,11 @@ class LoggerBase:
             RUN     — 僅 ERROR 以上通過
     """
 
+    @property
+    def adapters(self) -> List[LoggerAdapterBase]:
+        """目前已註冊的 adapter 清單（只讀）。"""
+        return self._adapters.copy()
+
     def _initialize_manager(self) -> None:
         self._enabled: bool = True
         self._adapters: List[LoggerAdapterBase] = []
