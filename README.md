@@ -769,6 +769,7 @@ def load_big_file(path): ...
 
 | 裝飾器 | 說明 |
 |---|---|
+| `@test_func(reason)` | 每次呼叫發出 `TestFuncWarning` |
 | `@old_method(reason)` | 每次呼叫發出 `OldFuncWarning` |
 | `@deprecated(reason)` | 每次呼叫發出 `DeprecationWarning` |
 | `@battered(reason)` | 每次呼叫發出 `UserWarning`（強調易崩潰）|
@@ -777,7 +778,10 @@ def load_big_file(path): ...
 | `@since(version)` | 靜態標記，說明此 API 自 *version* 起引入，無運行期副作用 |
 
 ```python
-from isd_py_framework_sdk.decorators import old_method, deprecated, battered, experimental, removed_in, since
+from isd_py_framework_sdk.decorators import test_func, old_method, deprecated, battered, experimental, removed_in, since
+
+@test_func("this function is still under testing...")
+def old_func(): ...
 
 @old_method("May Be Removed And Merged Into Another API.")
 def old_func(): ...

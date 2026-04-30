@@ -14,7 +14,7 @@ from isd_py_framework_sdk.decorators import (
     # profiling
     function_timer, timed_and_conditional_return, log_call, count_calls, profile_memory,
     # lifecycle
-    old_method, deprecated, battered, experimental, removed_in, since,
+    test_func, old_method, deprecated, battered, experimental, removed_in, since,
     # control-flow
     retry, once, suppress_exceptions, throttle, timeout,
     # concurrency
@@ -111,6 +111,9 @@ expect_pass("profile_memory: runs without error", lambda: _alloc())
 
 # ──────────────────────────────────────────────────────────────────────────────
 print("\n── Lifecycle ────────────────────────────────────────────────────────────")
+
+@test_func("under testing")
+def _old(): return 1
 
 @old_method("use new_func")
 def _old(): return 1
