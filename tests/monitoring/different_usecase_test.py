@@ -31,8 +31,8 @@ from isd_py_framework_sdk.monitoring.looped_function_timer import (
 COLOR_SINGLE_LOOP:        ColorLiteral = "yellow"
 COLOR_DECORATOR:          ColorLiteral = "purple"
 COLOR_MULTIPROC_SIMPLE:   ColorLiteral = "sky_blue"
-COLOR_MULTIPROC_THROTTLE: ColorLiteral = "magenta"
-COLOR_MULTIPROC_BATCH:    ColorLiteral = "cyan"
+COLOR_MULTIPROC_THROTTLE: ColorLiteral = "red"
+COLOR_MULTIPROC_BATCH:    ColorLiteral = "gray"
 
 
 # ===========================================================================
