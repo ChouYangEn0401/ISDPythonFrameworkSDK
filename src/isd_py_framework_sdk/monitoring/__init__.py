@@ -3,6 +3,9 @@ from .looped_function_timer import (
     MultiProcessLoopedFunctionTimer,
     LoopedFunction_timer_decorator,
     ProgressState,
+    ProgressLoggerProtocol,
+    _SimpleTerminalLogger as SimpleTerminalLogger,
+    ColorLiteral,
 )
 
 __all__ = [
@@ -10,4 +13,7 @@ __all__ = [
     "MultiProcessLoopedFunctionTimer",
     "LoopedFunction_timer_decorator",
     "ProgressState",
+    "ProgressLoggerProtocol",
+    "SimpleTerminalLogger",
+    "ColorLiteral",
 ]

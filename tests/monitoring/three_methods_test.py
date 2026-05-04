@@ -8,16 +8,26 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="repla
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 from isd_py_framework_sdk.monitoring.looped_function_timer import (
+    ColorLiteral,
     LoopedFunctionTimer,
     LoopedFunction_timer_decorator,
     MultiProcessLoopedFunctionTimer,
 )
 
+SINGLE_THREAD_COLOR: ColorLiteral = "yellow"
+DECORATOR_COLOR: ColorLiteral = "purple"
+MULTIPROCESS_COLOR: ColorLiteral = "sky_blue"
+
 
 ### --- 各種單元測試 --- ###
 def unit_test__single_thread():
     total = 100
-    timer = LoopedFunctionTimer(total=total, inline=True, level="CHECKPOINT")
+    timer = LoopedFunctionTimer(
+        total=total,
+        inline=True,
+        level="CHECKPOINT",
+        color=SINGLE_THREAD_COLOR,
+    )
 
     print(f"<<< 啟動 LoopTimer 單進程任務 (Total Tasks: {total}) >>>")
     for i in range(total):
@@ -31,7 +41,7 @@ def unit_test__single_thread():
 class _LocalTest:
     def __init__(self, total_tasks):
         self.total_tasks = total_tasks
-        self.timer = LoopedFunctionTimer(total=total_tasks)
+        self.timer = LoopedFunctionTimer(total=total_tasks, color=DECORATOR_COLOR)
 
     @LoopedFunction_timer_decorator
     def process_task1(self, task_id):
@@ -73,7 +83,12 @@ def unit_test__multiprocess():
     total_items = 10000
     max_workers = os.cpu_count() or 4
 
-    multi_timer = MultiProcessLoopedFunctionTimer(total=total_items, inline=True, level="CHECKPOINT")
+    multi_timer = MultiProcessLoopedFunctionTimer(
+        total=total_items,
+        inline=True,
+        level="CHECKPOINT",
+        color=MULTIPROCESS_COLOR,
+    )
 
     print(
         f"<<< 啟動 MultiLoopTimer 多工進度條 (Workers: {max_workers}, Total Tasks: {total_items}) >>>"

@@ -2,27 +2,76 @@ import datetime
 import functools
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from statistics import mean
-from typing import Callable, Optional, Protocol, runtime_checkable
+from typing import Callable, Literal, Optional, Protocol, runtime_checkable
 
-from isd_py_framework_sdk.message_logger import (
-    DarkThemeTerminalAdapter,
-    LogLevelLiteral,
-    SingletonSystemLogger,
-)
+from isd_py_framework_sdk.message_logger import LogLevelLiteral
 
 
-@dataclass(frozen=False)  ## this api should be mutable, so frozen=False !!??
-class ProgressState:
-    processed: int
-    total: int
-    total_time: float
-    eta_seconds: Optional[float]
+# ---------------------------------------------------------------------------
+# ANSI color support (self-contained, no external dependency)
+# ---------------------------------------------------------------------------
+
+ColorLiteral = Literal[
+    "red", "green", "yellow", "blue", "magenta",
+    "purple", "cyan", "sky_blue", "white", "black", "gray", "reset",
+]
+
+_ANSI_COLORS: dict[str, str] = {
+    "red":     "\033[91m",
+    "green":   "\033[92m",
+    "yellow":  "\033[93m",
+    "blue":    "\033[94m",
+    "magenta": "\033[95m",
+    "purple":  "\033[95m",
+    "cyan":    "\033[96m",
+    "sky_blue": "\033[96m",
+    "white":   "\033[97m",
+    "black":   "\033[90m",
+    "gray":    "\033[90m",
+    "reset":   "\033[0m",
+}
+_ANSI_RESET = "\033[0m"
 
 
-ProgressMessageMaker = Callable[[ProgressState, int, bool], str]
+# ---------------------------------------------------------------------------
+# Simple built-in terminal logger — no SingletonSystemLogger required
+# ---------------------------------------------------------------------------
 
+class _SimpleTerminalLogger:
+    """
+    最簡 terminal logger，直接使用 ANSI 色碼輸出。
+    滿足 ProgressLoggerProtocol，不依賴 SingletonSystemLogger。
+    """
+    _level_colors: dict[str, str] = {
+        "DEBUG":      "\033[94m",   # blue
+        "INFO":       "\033[97m",   # white
+        "CHECKPOINT": "\033[96m",   # cyan
+        "SUCCESS":    "\033[92m",   # green
+        "WARNING":    "\033[93m",   # yellow
+        "ERROR":      "\033[91m",   # red
+        "CRITICAL":   "\033[95m",   # magenta
+        "HIGHLIGHT":  "\033[93m",   # bright yellow
+    }
+
+    def log(self, msg: str, level: str = "INFO") -> None:
+        color = self._level_colors.get(level.upper(), "")
+        print(f"{color}{msg}{_ANSI_RESET}")
+
+    def info(self, msg: str) -> None:
+        self.log(msg, "INFO")
+
+    def success(self, msg: str) -> None:
+        self.log(msg, "SUCCESS")
+
+    def flush(self) -> None:
+        sys.stdout.flush()
+
+
+# ---------------------------------------------------------------------------
+# Protocol & data types
+# ---------------------------------------------------------------------------
 
 @runtime_checkable
 class ProgressLoggerProtocol(Protocol):
@@ -31,6 +80,22 @@ class ProgressLoggerProtocol(Protocol):
     def success(self, msg: str) -> None: ...
     def flush(self) -> None: ...
 
+
+@dataclass(frozen=False)
+class ProgressState:
+    processed: int
+    total: int
+    total_time: float
+    eta_seconds: Optional[float]
+    color: ColorLiteral = field(default="reset")  # 傳遞顏色給 message_maker
+
+
+ProgressMessageMaker = Callable[[ProgressState, int, bool], str]
+
+
+# ---------------------------------------------------------------------------
+# Default message maker (with ANSI colors restored)
+# ---------------------------------------------------------------------------
 
 def _default_message_maker(state: ProgressState, bar_len: int, use_bar: bool) -> str:
     eta_str = (
@@ -42,7 +107,10 @@ def _default_message_maker(state: ProgressState, bar_len: int, use_bar: bool) ->
     if use_bar:
         ratio = min(max(state.processed / state.total, 0), 1)
         filled_len = int(bar_len * ratio)
-        bar_str = f"{'█' * filled_len}{'-' * (bar_len - filled_len)}"
+        fg    = _ANSI_COLORS.get(state.color, _ANSI_RESET)
+        gray  = _ANSI_COLORS["gray"]
+        reset = _ANSI_RESET
+        bar_str = f"{fg}{'█' * filled_len}{gray}{'░' * (bar_len - filled_len)}{reset}"
         return (
             f"[{bar_str}] {state.processed:>3,}/{state.total:<3,} "
             f"TRT={state.total_time:.3f}s ETA={eta_str}"
@@ -53,6 +121,10 @@ def _default_message_maker(state: ProgressState, bar_len: int, use_bar: bool) ->
         f"TRT={state.total_time:.3f}s, ETA={eta_str}"
     )
 
+
+# ---------------------------------------------------------------------------
+# LoopedFunctionTimer
+# ---------------------------------------------------------------------------
 
 class LoopedFunctionTimer:
     @property
@@ -76,6 +148,7 @@ class LoopedFunctionTimer:
         total: Optional[int] = None,
         inline: bool = True,
         level: LogLevelLiteral = "INFO",
+        color: ColorLiteral = "reset",
         logger: Optional[ProgressLoggerProtocol] = None,
         message_maker: Optional[ProgressMessageMaker] = None,
     ):
@@ -87,6 +160,7 @@ class LoopedFunctionTimer:
         self._total_time = 0
         self._inline = inline
         self._level = level
+        self._color = color
         self._last_processed = 0
 
         self.update_interval = max(
@@ -95,11 +169,8 @@ class LoopedFunctionTimer:
         )
 
         self._message_maker = message_maker or _default_message_maker
-        self.logger = logger or SingletonSystemLogger()
-
-        if isinstance(self.logger, SingletonSystemLogger):
-            if getattr(self.logger, "adapters", None) is not None and not self.logger.adapters:
-                self.logger.register_adapter(DarkThemeTerminalAdapter("DEBUG"))
+        # 預設使用輕量 logger，不強制依賴 SingletonSystemLogger
+        self.logger: ProgressLoggerProtocol = logger or _SimpleTerminalLogger()
 
     def __enter__(self):
         self.start()
@@ -183,6 +254,7 @@ class LoopedFunctionTimer:
             total=total,
             total_time=self._total_time,
             eta_seconds=eta_val,
+            color=self._color,   # 將顏色傳入 message_maker
         )
         text = self._message_maker(state, bar_len, bar)
 
@@ -204,7 +276,7 @@ class LoopedFunctionTimer:
         self.msg(self._total, self._total, inline, bar, bar_len, level, force=True)
 
     def end_msg(self):
-        self.logger.success("DONE")
+        self.logger.success("\n✅ DONE !!")
 
     def show_info(self, b_clean_progress_bar=False):
         if b_clean_progress_bar:
@@ -235,8 +307,17 @@ class MultiProcessLoopedFunctionTimer(LoopedFunctionTimer):
         level: LogLevelLiteral = "INFO",
         logger: Optional[ProgressLoggerProtocol] = None,
         message_maker: Optional[ProgressMessageMaker] = None,
+        *,
+        color: ColorLiteral = "reset",
     ):
-        super().__init__(total, inline, level, logger, message_maker)
+        super().__init__(
+            total=total,
+            inline=inline,
+            level=level,
+            color=color,
+            logger=logger,
+            message_maker=message_maker,
+        )
         self._processed_count = 0
         self._last_update_count = 0
         self.update_interval = max(
