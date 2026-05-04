@@ -1005,22 +1005,23 @@ from isd_py_framework_sdk.monitoring import (
 
 ---
 
-### 支援情境一覽（`tests/monitoring/different_usecase_test.py`）
+### 支援情境一覽
 
-以下五種情境均通過驗證，代表套件在各場景下的正確性：
+以下五種情境均經過驗證，代表套件在各場景下的正確性。
 
-| 情境 | 函式名稱 | 核心 API | 說明 |
-|---|---|---|---|
-| 一 | `test_single_loop__inline_progress_bar` | `start` / `stop` / `msg` / `show_info` | 單進程 for 迴圈，inline 進度條覆寫同行，含 ETA 與顏色 |
-| 二 | `test_decorator__auto_timer_on_class_method` | `@LoopedFunction_timer_decorator` | 裝飾器自動計時 class method，無需手動 start/stop |
-| 三 | `test_multiprocess__as_completed_simple` | `task_completed` | ProcessPoolExecutor + as_completed，任務無序完成，進度計數正確 |
-| 四 | `test_multiprocess__double_loop_throttled` | `task_completed` + `wait(FIRST_COMPLETED)` | 外層高成本初始化 + 內層逐一提交；節流防止佇列爆炸 |
-| 五 | `test_multiprocess__double_loop_batched_throttled` | `batched_task_completed` + `wait(FIRST_COMPLETED)` | 內層打包批次後提交；批次節流減少 IPC overhead |
+| 情境 | 核心 API | 說明 |
+|---|---|---|
+| 一、單進程 for 迴圈 | `start` / `stop` / `msg` / `show_info` | inline 進度條覆寫同行，含 ETA 與顏色 |
+| 二、裝飾器自動計時 | `@LoopedFunction_timer_decorator` | 自動計時 class method，無需手動 start/stop |
+| 三、多工 as_completed | `task_completed` | ProcessPoolExecutor + as_completed，任務無序完成，進度計數正確 |
+| 四、雙重迴圈節流 | `task_completed` + `wait(FIRST_COMPLETED)` | 外層高成本初始化 + 內層逐一提交；節流防止佇列爆炸 |
+| 五、雙重迴圈批次節流 | `batched_task_completed` + `wait(FIRST_COMPLETED)` | 內層打包批次後提交；批次節流減少 IPC overhead |
 
-執行全部測試：
+完整可執行範例見 `examples/monitoring/different_usecase.py`（下載原始碼後可直接執行）：
 
 ```powershell
-.venv\Scripts\python.exe tests/monitoring/different_usecase_test.py
+# 下載原始碼後
+.venv\Scripts\python.exe examples/monitoring/different_usecase.py
 ```
 
 ---
@@ -2163,6 +2164,6 @@ builder__whl.bat
 ---
 
 ## Acknowledgements / 銘謝
+本專案的原始碼目前放置在： `https://github.com/ChouYangEn0401/ISDPythonFrameworkSDK`
 
 本專案的底層架構，原先是在國立台灣大學（NTU）實驗室中擔任實驗助理期間開發，而後本人重新進行維護，詳見 `AUTHORS.md`。
-
