@@ -7,7 +7,7 @@ import time
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
-from exps_src.isd_py_framework_sdk.monitoring.looped_function_timer import (
+from isd_py_framework_sdk.monitoring.looped_function_timer import (
     LoopedFunctionTimer,
     LoopedFunction_timer_decorator,
     MultiProcessLoopedFunctionTimer,
