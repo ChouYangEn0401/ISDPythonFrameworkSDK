@@ -46,6 +46,7 @@ class LoggerBase:
         self._enabled: bool = True
         self._adapters: List[LoggerAdapterBase] = []
         self._max_level_len: int = max(len(lvl) for lvl in LevelOrder)
+        self._shift_amount = 0
 
     # --- Adapter 管理 ---------------------------------------------------------
 
@@ -102,13 +103,14 @@ class LoggerBase:
         # --- Message Formatting ---
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         padded_level = level.ljust(self._max_level_len)
+        indent = "\t" * self._shift_amount
 
         if level == "HIGHLIGHT":
-            formatted = f"\n[{timestamp}] [{padded_level}]: 🚀🚀🚀 {message} 🚀🚀🚀"
+            formatted = f"\n{indent}[{timestamp}] [{padded_level}]: 🚀🚀🚀 {message} 🚀🚀🚀"
         elif shine:
-            formatted = f"[{timestamp}] [{padded_level}]: ✨ {message} ✨"
+            formatted = f"[{indent}{timestamp}] [{padded_level}]: ✨ {message} ✨"
         else:
-            formatted = f"[{timestamp}] [{padded_level}]: {message}"
+            formatted = f"[{indent}{timestamp}] [{padded_level}]: {message}"
 
         # --- Fan-out to All Adapters ---
         for adapter in self._adapters:
@@ -135,3 +137,16 @@ class LoggerBase:
     def flush(self) -> None:
         """Alias for flush_all()。"""
         self.flush_all()
+
+    # --- Shrift Head ---------------------------------------------------------
+
+    def shift(self) -> None:
+        """暫時保留接口，未來可用於實現 log 分頁或分段功能。"""
+        self._shift_amount += 1
+    
+    def unshift(self) -> None:
+        """暫時保留接口，未來可用於實現 log 分頁或分段功能。"""
+        self._shift_amount -= 1
+        if self._shift_amount < 0:
+            self._shift_amount = 0
+

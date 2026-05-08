@@ -32,11 +32,11 @@ from .base.levels import LogLevelLiteral, LevelOrder
 from .base.LoggerAdapterBase import LoggerAdapterBase
 from .base.LoggerBase import LoggerBase
 from .adapters import (
-    TerminalAdapter,
+    AbstractTerminalAdapterBase,
     DarkThemeTerminalAdapter,
     LightThemeTerminalAdapter,
     FileAdapter,
-    TkinterAdapter,
+    AbstractTkinterAdapterBase,
     DarkThemeTkinterAdapter,
     LightThemeTkinterAdapter,
     TkLabelAdapter,
@@ -62,8 +62,8 @@ __all__ = [
     "LoggerAdapterBase",
     "LoggerBase",
     # adapters (abstract)
-    "TerminalAdapter",
-    "TkinterAdapter",
+    "AbstractTerminalAdapterBase",
+    "AbstractTkinterAdapterBase",
     "TkLabelAdapter",
     "TtkLabelAdapter",
     # adapters (concrete — terminal)

@@ -2,13 +2,13 @@
 adapters.py — 所有內建 Adapter 實作
 
 內建 Adapter 一覽：
-    TerminalAdapter（抽象）
+    AbstractTerminalAdapterBase（抽象）
         ├── DarkThemeTerminalAdapter   彩色 console（深色終端）
         └── LightThemeTerminalAdapter  彩色 console（淺色終端）
 
     FileAdapter                        thread-safe 本機日誌檔案
 
-    TkinterAdapter（抽象）
+    AbstractTkinterAdapterBase（抽象）
         ├── DarkThemeTkinterAdapter    Tkinter Text widget（深色主題）
         └── LightThemeTkinterAdapter   Tkinter Text widget（淺色主題）
 
@@ -37,7 +37,7 @@ from .base.levels import LogLevelLiteral
 # Terminal Adapters
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TerminalAdapter(LoggerAdapterBase, ABC):
+class AbstractTerminalAdapterBase(LoggerAdapterBase, ABC):
     """
     彩色 terminal 輸出的抽象基底。
     子類透過類別屬性 ``_level_colors`` 提供每個 level 的 colorama 色碼。
@@ -56,7 +56,7 @@ class TerminalAdapter(LoggerAdapterBase, ABC):
         print(f"{color}{formatted}{Style.RESET_ALL}")
 
 
-class DarkThemeTerminalAdapter(TerminalAdapter):
+class DarkThemeTerminalAdapter(AbstractTerminalAdapterBase):
     """適合深色 / 黑色終端背景的彩色 console adapter。"""
     _level_colors = {
         "DEBUG":      Fore.BLUE,
@@ -70,7 +70,7 @@ class DarkThemeTerminalAdapter(TerminalAdapter):
     }
 
 
-class LightThemeTerminalAdapter(TerminalAdapter):
+class LightThemeTerminalAdapter(AbstractTerminalAdapterBase):
     """適合淺色 / 白色終端背景的彩色 console adapter。"""
     _level_colors = {
         "DEBUG":      Fore.BLUE,
@@ -148,7 +148,7 @@ class FileAdapter(LoggerAdapterBase):
 # Tkinter Adapters
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TkinterAdapter(LoggerAdapterBase, ABC):
+class AbstractTkinterAdapterBase(LoggerAdapterBase, ABC):
     """
     Tkinter ``tk.Text`` widget 彩色輸出的抽象基底。
 
@@ -246,7 +246,7 @@ class TkinterAdapter(LoggerAdapterBase, ABC):
         self.broadcast(level, formatted, shine)
 
 
-class DarkThemeTkinterAdapter(TkinterAdapter):
+class DarkThemeTkinterAdapter(AbstractTkinterAdapterBase):
     """適合深色背景（如 #1e1e1e）的 Tkinter Text widget adapter。"""
     _level_colors = {
         "DEBUG":      "#5599ff",
@@ -260,7 +260,7 @@ class DarkThemeTkinterAdapter(TkinterAdapter):
     }
 
 
-class LightThemeTkinterAdapter(TkinterAdapter):
+class LightThemeTkinterAdapter(AbstractTkinterAdapterBase):
     """適合淺色背景（如 #ffffff）的 Tkinter Text widget adapter。"""
     _level_colors = {
         "DEBUG":      "#0000cc",

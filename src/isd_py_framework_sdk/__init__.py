@@ -13,7 +13,7 @@ from .message_logger.adapters import (
     DarkThemeTerminalAdapter,
     LightThemeTerminalAdapter,
     FileAdapter,
-    TkinterAdapter,
+    AbstractTkinterAdapterBase,
     DarkThemeTkinterAdapter,
     LightThemeTkinterAdapter,
 )
@@ -230,7 +230,7 @@ __all__ = [
     "DarkThemeTerminalAdapter",
     "LightThemeTerminalAdapter",
     "FileAdapter",
-    "TkinterAdapter",
+    "AbstractTkinterAdapterBase",
     "DarkThemeTkinterAdapter",
     "LightThemeTkinterAdapter",
     # decorators — timing / legacy

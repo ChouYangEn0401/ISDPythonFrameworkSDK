@@ -4,10 +4,7 @@ from typing import Optional
 from isd_py_framework_sdk.base.Singleton import SingletonMetaclass
 from isd_py_framework_sdk.message_logger.base.levels import LogLevelLiteral
 from isd_py_framework_sdk.message_logger.base.LoggerBase import LoggerBase
-from isd_py_framework_sdk.message_logger.adapters import (
-    LoggerAdapterBase,
-    TkinterAdapter,
-)
+from isd_py_framework_sdk.message_logger.adapters import LoggerAdapterBase
 
 
 class SingletonSystemLogger(LoggerBase, metaclass=SingletonMetaclass):
@@ -71,3 +68,12 @@ class SingletonSystemLogger(LoggerBase, metaclass=SingletonMetaclass):
     def flush(self) -> None:
         """Alias for flush_all()。"""
         ...
+
+    def shift(self) -> None:
+        """暫時保留接口，未來可用於實現 log 分頁或分段功能。"""
+        ...
+    
+    def unshift(self) -> None:
+        """暫時保留接口，未來可用於實現 log 分頁或分段功能。"""
+        ...
+
