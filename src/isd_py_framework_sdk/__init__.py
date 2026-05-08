@@ -7,8 +7,10 @@ from .events.EventBase import IEventBase, IParsEventBase
 from .events.EventManager import SingletonEventManager
 from .events.DelayEventBusManager import DelayEventBusManager, IDelayEventBase, IDelayParsEventBase
 from .events.MulticastCallback import MulticastCallback
-from .message_logger.SingletonSystemLogger import SingletonSystemLogger
-from .message_logger.adapters import (
+from .message_logger import (
+    SingletonSystemLogger,
+    get_logger,
+    configure_logger,
     LoggerAdapterBase,
     DarkThemeTerminalAdapter,
     LightThemeTerminalAdapter,
@@ -16,6 +18,12 @@ from .message_logger.adapters import (
     AbstractTkinterAdapterBase,
     DarkThemeTkinterAdapter,
     LightThemeTkinterAdapter,
+    DarkThemeTkLabelAdapter,
+    LightThemeTkLabelAdapter,
+    DarkThemeTtkLabelAdapter,
+    LightThemeTtkLabelAdapter,
+    LocalHTTPAdapter,
+    QueuedSocketAdapter,
 )
 
 # ── decorators ────────────────────────────────────────────────────────────
@@ -226,13 +234,20 @@ __all__ = [
     "MulticastCallback",
     # logger
     "SingletonSystemLogger",
+    "get_logger",
+    "configure_logger",
     "LoggerAdapterBase",
     "DarkThemeTerminalAdapter",
     "LightThemeTerminalAdapter",
     "FileAdapter",
-    "AbstractTkinterAdapterBase",
     "DarkThemeTkinterAdapter",
     "LightThemeTkinterAdapter",
+    "DarkThemeTkLabelAdapter",
+    "LightThemeTkLabelAdapter",
+    "DarkThemeTtkLabelAdapter",
+    "LightThemeTtkLabelAdapter",
+    "LocalHTTPAdapter",
+    "QueuedSocketAdapter",
     # decorators — timing / legacy
     "function_timer",
     "timed_and_conditional_return",

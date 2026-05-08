@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 from .levels import LevelOrder, LogLevelLiteral
 
@@ -7,12 +8,24 @@ class LoggerAdapterBase(ABC):
     """
         所有輸出 adapter 的抽象基底類別。
 
-        子類只需實作 broadcast()，並在建構時傳入 LEVEL_FILTER 設定最低顯示等級。
+        子類只需實作 broadcast()，並在建構時傳入 level_filter 設定最低顯示等級。
         level_filter 之上（含）的訊息才會被輸出；低於此等級的訊息會被靜默略過。
     """
 
-    def __init__(self, LEVEL_FILTER: LogLevelLiteral, *args, **kwargs):
-        self.level_filter = self.level_formator(LEVEL_FILTER)
+    def __init__(
+        self,
+        level_filter: LogLevelLiteral | str = "INFO",
+        *args: Any,
+        **kwargs: Any,
+    ):
+        legacy_level_filter = kwargs.pop("LEVEL_FILTER", None)
+        if legacy_level_filter is not None:
+            if level_filter != "INFO":
+                raise TypeError("Use either level_filter or LEVEL_FILTER, not both.")
+            level_filter = legacy_level_filter
+
+        self.level_filter = self.normalize_level(level_filter)
+        self._have_level(self.level_filter, b_stop_when_error=True)
 
     # --- Core Method ---------------------------------------------------------
 
@@ -23,9 +36,11 @@ class LoggerAdapterBase(ABC):
 
     def set_filtered_level(self, level: LogLevelLiteral) -> None:
         """動態變更此 adapter 的最低顯示等級。"""
-        level = self.level_formator(level)
+        level = self.normalize_level(level)
         if self._have_level(level, b_stop_when_error=True):
             self.level_filter = level
+
+    set_level_filter = set_filtered_level
 
     def flush(self) -> None:
         """Flush any buffered output. Override in adapters that buffer output (e.g. FileAdapter, TkinterAdapter)."""
@@ -41,8 +56,10 @@ class LoggerAdapterBase(ABC):
             print(f"  {key:<12} = {value}")
 
     @staticmethod
-    def level_formator(level: str) -> str:
+    def normalize_level(level: str) -> str:
         return level.upper()
+
+    level_formator = normalize_level
 
     @staticmethod
     def _have_level(level: str, b_stop_when_error: bool = False) -> bool:
@@ -54,4 +71,10 @@ class LoggerAdapterBase(ABC):
 
     def _pass_filter(self, level: str) -> bool:
         """True 代表此等級可以通過並輸出（>= level_filter）。"""
+        level = self.normalize_level(level)
+        self._have_level(level, b_stop_when_error=True)
         return LevelOrder[level] >= LevelOrder[self.level_filter]
+
+    def should_emit(self, level: str) -> bool:
+        """True 代表此等級可以通過此 adapter 的 level_filter。"""
+        return self._pass_filter(level)

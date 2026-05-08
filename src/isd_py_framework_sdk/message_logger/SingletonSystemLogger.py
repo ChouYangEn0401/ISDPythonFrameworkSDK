@@ -14,8 +14,8 @@ class SingletonSystemLogger(LoggerBase, metaclass=SingletonMetaclass):
 
         典型使用方式：
             logger = SingletonSystemLogger()
-            logger.register_adapter(DarkThemeTerminalAdapter("DEBUG"))
-            logger.register_adapter(FileAdapter("WARNING", Path("app.log")))
+            logger.add_adapter(DarkThemeTerminalAdapter(level_filter="DEBUG"))
+            logger.add_adapter(FileAdapter(level_filter="WARNING", output_file=Path("app.log")))
 
             logger.info("系統啟動")
             logger.error("發生錯誤")
@@ -23,6 +23,6 @@ class SingletonSystemLogger(LoggerBase, metaclass=SingletonMetaclass):
 
         注意：
             SingletonMetaclass 會在第一次建立實例後自動呼叫 _initialize_manager()，
-            不需要也不應該手動呼叫。後續透過 register_adapter 新增輸出目標即可。
+            不需要也不應該手動呼叫。後續透過 add_adapter 新增輸出目標即可。
     """
     pass

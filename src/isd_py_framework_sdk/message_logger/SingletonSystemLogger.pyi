@@ -1,10 +1,7 @@
-from pathlib import Path
-from typing import Optional
-
 from isd_py_framework_sdk.base.Singleton import SingletonMetaclass
 from isd_py_framework_sdk.message_logger.base.levels import LogLevelLiteral
 from isd_py_framework_sdk.message_logger.base.LoggerBase import LoggerBase
-from isd_py_framework_sdk.message_logger.adapters import LoggerAdapterBase
+from isd_py_framework_sdk.message_logger.base.LoggerAdapterBase import LoggerAdapterBase
 
 
 class SingletonSystemLogger(LoggerBase, metaclass=SingletonMetaclass):
@@ -17,8 +14,16 @@ class SingletonSystemLogger(LoggerBase, metaclass=SingletonMetaclass):
         """新增一個輸出 adapter。"""
         ...
 
+    def add_adapter(self, adapter: LoggerAdapterBase) -> LoggerAdapterBase:
+        """新增一個輸出 adapter，並回傳該 adapter 方便呼叫端保留參考。"""
+        ...
+
     def unregister_adapter(self, adapter: LoggerAdapterBase) -> None:
         """移除指定 adapter；若不存在則靜默忽略。"""
+        ...
+
+    def remove_adapter(self, adapter: LoggerAdapterBase) -> None:
+        """Alias for unregister_adapter()."""
         ...
 
     def clear_adapters(self) -> None:
@@ -31,8 +36,16 @@ class SingletonSystemLogger(LoggerBase, metaclass=SingletonMetaclass):
         """重新啟用 log 廣播。"""
         ...
 
+    def enable(self) -> None:
+        """Alias for enable_broadcast_msg()."""
+        ...
+
     def disable_broadcast_msg(self) -> None:
         """暫時停用 log 廣播（不影響 adapter 設定）。"""
+        ...
+
+    def disable(self) -> None:
+        """Alias for disable_broadcast_msg()."""
         ...
 
     # --- 核心 log 方法 --------------------------------------------------------

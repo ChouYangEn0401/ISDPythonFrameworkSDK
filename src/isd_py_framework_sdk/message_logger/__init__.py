@@ -1,31 +1,20 @@
 """
-message_logger — 結構化多 adapter 日誌套件
+message_logger - structured logging with composable output adapters.
 
-公開 API（穩定）：
-    SingletonSystemLogger   全域單例 logger
-    LoggerBase              可繼承的 logger 基底
-    LoggerAdapterBase       自訂 adapter 需繼承此類
+Recommended entrypoint:
+    from isd_py_framework_sdk.message_logger import (
+        SingletonSystemLogger,
+        DarkThemeTerminalAdapter,
+        FileAdapter,
+    )
 
-    # Adapters
-    DarkThemeTerminalAdapter    彩色 console（深色終端）
-    LightThemeTerminalAdapter   彩色 console（淺色終端）
-    FileAdapter                 thread-safe 本機日誌檔案
-    DarkThemeTkinterAdapter     Tkinter Text widget（深色主題）
-    LightThemeTkinterAdapter    Tkinter Text widget（淺色主題）
-    DarkThemeTkLabelAdapter     Tkinter tk.Label（深色主題）
-    LightThemeTkLabelAdapter    Tkinter tk.Label（淺色主題）
-    DarkThemeTtkLabelAdapter    Tkinter ttk.Label（深色主題）
-    LightThemeTtkLabelAdapter   Tkinter ttk.Label（淺色主題）
-    LocalHTTPAdapter           本機/遠端 HTTP JSON POST（MVP）
-    QueuedSocketAdapter        非阻塞 queue + worker socket 骨架
-    HTMLAdapter                 HTML 輸出 stub
-    HTTPAdapter                 HTTP 遠端輸出 stub
-    DBAdapter                   資料庫輸出 stub
-    WebsocketAdapter            WebSocket 輸出 stub
+The top-level public API intentionally keeps the common path small:
+    - create/get the singleton logger
+    - add concrete adapters
+    - optionally subclass LoggerAdapterBase for a custom output
 
-    # Types
-    LogLevelLiteral     等級字串的 Literal 型別
-    LevelOrder          等級 → 數值對應字典
+Advanced base classes remain importable for compatibility, but are not part of
+``__all__`` so general users do not need to learn the internal inheritance tree.
 """
 
 from .base.levels import LogLevelLiteral, LevelOrder
@@ -54,40 +43,58 @@ from .adapters import (
 )
 from .SingletonSystemLogger import SingletonSystemLogger
 
+
+def get_logger(
+    *adapters: LoggerAdapterBase,
+    clear: bool = False,
+) -> SingletonSystemLogger:
+    """
+    Return the global logger and optionally attach adapters.
+
+    ``clear=True`` resets previously registered adapters before adding the new
+    ones. The default is non-destructive because this logger is a singleton.
+    """
+    logger = SingletonSystemLogger()
+    if clear:
+        logger.clear_adapters()
+    for adapter in adapters:
+        logger.register_adapter(adapter)
+    return logger
+
+
+def configure_logger(
+    *adapters: LoggerAdapterBase,
+    clear: bool = True,
+) -> SingletonSystemLogger:
+    """
+    Configure the global logger for an application startup path.
+
+    Unlike ``get_logger()``, this clears existing adapters by default because it
+    is meant for one-time setup.
+    """
+    return get_logger(*adapters, clear=clear)
+
+
 __all__ = [
-    # types
-    "LogLevelLiteral",
-    "LevelOrder",
-    # base classes
-    "LoggerAdapterBase",
-    "LoggerBase",
-    # adapters (abstract)
-    "AbstractTerminalAdapterBase",
-    "AbstractTkinterAdapterBase",
-    "TkLabelAdapter",
-    "TtkLabelAdapter",
-    # adapters (concrete — terminal)
-    "DarkThemeTerminalAdapter",
-    "LightThemeTerminalAdapter",
-    # adapters (concrete — file)
-    "FileAdapter",
-    # adapters (concrete — tkinter Text)
-    "DarkThemeTkinterAdapter",
-    "LightThemeTkinterAdapter",
-    # adapters (concrete — tk.Label)
-    "DarkThemeTkLabelAdapter",
-    "LightThemeTkLabelAdapter",
-    # adapters (concrete — ttk.Label)
-    "DarkThemeTtkLabelAdapter",
-    "LightThemeTtkLabelAdapter",
-    # adapters (concrete — remote)
-    "LocalHTTPAdapter",
-    "QueuedSocketAdapter",
-    # adapters (stub)
-    "HTMLAdapter",
-    "HTTPAdapter",
-    "DBAdapter",
-    "WebsocketAdapter",
     # logger
     "SingletonSystemLogger",
+    "get_logger",
+    "configure_logger",
+    # extension point
+    "LoggerAdapterBase",
+    # levels
+    "LogLevelLiteral",
+    "LevelOrder",
+    # common adapters
+    "DarkThemeTerminalAdapter",
+    "LightThemeTerminalAdapter",
+    "FileAdapter",
+    "DarkThemeTkinterAdapter",
+    "LightThemeTkinterAdapter",
+    "DarkThemeTkLabelAdapter",
+    "LightThemeTkLabelAdapter",
+    "DarkThemeTtkLabelAdapter",
+    "LightThemeTtkLabelAdapter",
+    "LocalHTTPAdapter",
+    "QueuedSocketAdapter",
 ]

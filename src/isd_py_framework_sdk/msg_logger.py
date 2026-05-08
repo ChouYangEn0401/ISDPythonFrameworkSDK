@@ -1,56 +1,56 @@
 """
-isd_py_framework_sdk.msg_logger — 日誌系統的短路徑別名。
+isd_py_framework_sdk.msg_logger - short alias for message_logger.
 
-等同於從 isd_py_framework_sdk.message_logger 匯入，提供更簡潔的 namespace：
-    from isd_py_framework_sdk.msg_logger import SingletonSystemLogger, DarkThemeTerminalAdapter, ...
+This module mirrors the stable public API from
+``isd_py_framework_sdk.message_logger``.
 """
 
 from .message_logger import (
     LogLevelLiteral,
     LevelOrder,
+    SingletonSystemLogger,
+    get_logger,
+    configure_logger,
     LoggerAdapterBase,
-    AbstractTerminalAdapterBase,
     DarkThemeTerminalAdapter,
     LightThemeTerminalAdapter,
     FileAdapter,
-    AbstractTkinterAdapterBase,
     DarkThemeTkinterAdapter,
     LightThemeTkinterAdapter,
-    TkLabelAdapter,
     DarkThemeTkLabelAdapter,
     LightThemeTkLabelAdapter,
-    TtkLabelAdapter,
     DarkThemeTtkLabelAdapter,
     LightThemeTtkLabelAdapter,
+    LocalHTTPAdapter,
+    QueuedSocketAdapter,
+    # Compatibility names; intentionally omitted from __all__.
+    LoggerBase,
+    AbstractTerminalAdapterBase,
+    AbstractTkinterAdapterBase,
+    TkLabelAdapter,
+    TtkLabelAdapter,
     HTMLAdapter,
     HTTPAdapter,
     DBAdapter,
     WebsocketAdapter,
-    LoggerBase,
-    SingletonSystemLogger,
 )
 
 __all__ = [
     "LogLevelLiteral",
     "LevelOrder",
+    "SingletonSystemLogger",
+    "get_logger",
+    "configure_logger",
     "LoggerAdapterBase",
-    "AbstractTerminalAdapterBase",
     "DarkThemeTerminalAdapter",
     "LightThemeTerminalAdapter",
     "FileAdapter",
-    "AbstractTkinterAdapterBase",
     "DarkThemeTkinterAdapter",
     "LightThemeTkinterAdapter",
-    "TkLabelAdapter",
     "DarkThemeTkLabelAdapter",
     "LightThemeTkLabelAdapter",
-    "TtkLabelAdapter",
     "DarkThemeTtkLabelAdapter",
     "LightThemeTtkLabelAdapter",
-    "HTMLAdapter",
-    "HTTPAdapter",
-    "DBAdapter",
-    "WebsocketAdapter",
-    "LoggerBase",
-    "SingletonSystemLogger",
+    "LocalHTTPAdapter",
+    "QueuedSocketAdapter",
 ]

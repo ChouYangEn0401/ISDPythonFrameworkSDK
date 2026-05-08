@@ -32,6 +32,21 @@ from colorama import Fore, Style
 from .base.LoggerAdapterBase import LoggerAdapterBase
 from .base.levels import LogLevelLiteral
 
+__all__ = [
+    "LoggerAdapterBase",
+    "DarkThemeTerminalAdapter",
+    "LightThemeTerminalAdapter",
+    "FileAdapter",
+    "DarkThemeTkinterAdapter",
+    "LightThemeTkinterAdapter",
+    "DarkThemeTkLabelAdapter",
+    "LightThemeTkLabelAdapter",
+    "DarkThemeTtkLabelAdapter",
+    "LightThemeTtkLabelAdapter",
+    "LocalHTTPAdapter",
+    "QueuedSocketAdapter",
+]
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Terminal Adapters
@@ -47,8 +62,8 @@ class AbstractTerminalAdapterBase(LoggerAdapterBase, ABC):
     _level_colors: dict[str, str] = {}
 
     def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
-        level = self.level_formator(level)
-        if not self._pass_filter(level):
+        level = self.normalize_level(level)
+        if not self.should_emit(level):
             return
         color = self._level_colors.get(level, "")
         if shine:
@@ -93,7 +108,7 @@ class FileAdapter(LoggerAdapterBase):
     Thread-safe 本機檔案輸出（UTF-8，預設 append 模式）。
 
     Args:
-        LEVEL_FILTER: 最低顯示等級。
+        level_filter: 最低顯示等級。
         output_file:  輸出路徑，預設為 ``app_output.log``。
         mode:         ``"a"``（追加，預設）或 ``"w"``（覆寫）。
         auto_flush:   每次寫入後立即 flush，預設 True。
@@ -101,14 +116,14 @@ class FileAdapter(LoggerAdapterBase):
 
     def __init__(
         self,
-        LEVEL_FILTER: LogLevelLiteral,
+        level_filter: LogLevelLiteral | str = "INFO",
         output_file: Path = Path("app_output.log"),
         *,
         mode: str = "a",
         auto_flush: bool = True,
         **kwargs,
     ):
-        super().__init__(LEVEL_FILTER, **kwargs)
+        super().__init__(level_filter, **kwargs)
         self._log_file = Path(output_file)
         self._mode = mode
         self._auto_flush = auto_flush
@@ -116,8 +131,8 @@ class FileAdapter(LoggerAdapterBase):
         self._file = self._log_file.open(mode, encoding="utf-8")
 
     def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
-        level = self.level_formator(level)
-        if not self._pass_filter(level):
+        level = self.normalize_level(level)
+        if not self.should_emit(level):
             return
         with self._lock:
             self._file.write(formatted + "\n")
@@ -167,12 +182,12 @@ class AbstractTkinterAdapterBase(LoggerAdapterBase, ABC):
 
     def __init__(
         self,
-        LEVEL_FILTER: LogLevelLiteral,
+        level_filter: LogLevelLiteral | str = "INFO",
         tk_window=None,
         *args,
         **kwargs,
     ):
-        super().__init__(LEVEL_FILTER, *args, **kwargs)
+        super().__init__(level_filter, *args, **kwargs)
         self._tk_window = tk_window
         if self._tk_window is not None:
             self._configure_tags()
@@ -205,8 +220,8 @@ class AbstractTkinterAdapterBase(LoggerAdapterBase, ABC):
     # --- Broadcast ------------------------------------------------------------
 
     def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
-        level = self.level_formator(level)
-        if not self._pass_filter(level):
+        level = self.normalize_level(level)
+        if not self.should_emit(level):
             return
         if self._tk_window is None:
             return
@@ -225,8 +240,8 @@ class AbstractTkinterAdapterBase(LoggerAdapterBase, ABC):
 
         若 widget 為空則退化為普通 ``broadcast()``。
         """
-        level = self.level_formator(level)
-        if not self._pass_filter(level):
+        level = self.normalize_level(level)
+        if not self.should_emit(level):
             return
         if self._tk_window is None:
             return
@@ -295,12 +310,12 @@ class TkLabelAdapter(LoggerAdapterBase, ABC):
 
     def __init__(
         self,
-        LEVEL_FILTER: LogLevelLiteral,
+        level_filter: LogLevelLiteral | str = "INFO",
         tk_label=None,
         *args,
         **kwargs,
     ):
-        super().__init__(LEVEL_FILTER, *args, **kwargs)
+        super().__init__(level_filter, *args, **kwargs)
         self._tk_label = tk_label
 
     def set_tk_label(self, tk_label) -> None:
@@ -308,8 +323,8 @@ class TkLabelAdapter(LoggerAdapterBase, ABC):
         self._tk_label = tk_label
 
     def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
-        level = self.level_formator(level)
-        if not self._pass_filter(level):
+        level = self.normalize_level(level)
+        if not self.should_emit(level):
             return
         if self._tk_label is None:
             return
@@ -375,12 +390,12 @@ class TtkLabelAdapter(LoggerAdapterBase, ABC):
 
     def __init__(
         self,
-        LEVEL_FILTER: LogLevelLiteral,
+        level_filter: LogLevelLiteral | str = "INFO",
         ttk_label=None,
         *args,
         **kwargs,
     ):
-        super().__init__(LEVEL_FILTER, *args, **kwargs)
+        super().__init__(level_filter, *args, **kwargs)
         self._ttk_label = ttk_label
 
     def set_ttk_label(self, ttk_label) -> None:
@@ -389,8 +404,8 @@ class TtkLabelAdapter(LoggerAdapterBase, ABC):
 
     def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
         import tkinter.ttk as _ttk
-        level = self.level_formator(level)
-        if not self._pass_filter(level):
+        level = self.normalize_level(level)
+        if not self.should_emit(level):
             return
         if self._ttk_label is None:
             return
@@ -451,7 +466,7 @@ class LocalHTTPAdapter(LoggerAdapterBase):
 
     def __init__(
         self,
-        LEVEL_FILTER: LogLevelLiteral,
+        level_filter: LogLevelLiteral | str = "INFO",
         endpoint_url: str = "http://127.0.0.1:8000/logs",
         *,
         timeout: float = 0.5,
@@ -459,7 +474,7 @@ class LocalHTTPAdapter(LoggerAdapterBase):
         include_formatted: bool = True,
         **kwargs,
     ):
-        super().__init__(LEVEL_FILTER, **kwargs)
+        super().__init__(level_filter, **kwargs)
         self._endpoint_url = endpoint_url
         self._timeout = timeout
         self._fail_silently = fail_silently
@@ -476,8 +491,8 @@ class LocalHTTPAdapter(LoggerAdapterBase):
         return payload
 
     def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
-        level = self.level_formator(level)
-        if not self._pass_filter(level):
+        level = self.normalize_level(level)
+        if not self.should_emit(level):
             return
 
         payload = self._make_payload(level, formatted, shine)
@@ -514,7 +529,7 @@ class QueuedSocketAdapter(LoggerAdapterBase):
 
     def __init__(
         self,
-        LEVEL_FILTER: LogLevelLiteral,
+        level_filter: LogLevelLiteral | str = "INFO",
         host: str = "127.0.0.1",
         port: int = 9020,
         *,
@@ -523,7 +538,7 @@ class QueuedSocketAdapter(LoggerAdapterBase):
         fail_silently: bool = True,
         **kwargs,
     ):
-        super().__init__(LEVEL_FILTER, **kwargs)
+        super().__init__(level_filter, **kwargs)
         self._host = host
         self._port = port
         self._protocol = protocol.lower()
@@ -574,8 +589,8 @@ class QueuedSocketAdapter(LoggerAdapterBase):
                 self._queue.task_done()
 
     def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
-        level = self.level_formator(level)
-        if not self._pass_filter(level):
+        level = self.normalize_level(level)
+        if not self.should_emit(level):
             return
         try:
             self._queue.put_nowait((level, formatted, shine))

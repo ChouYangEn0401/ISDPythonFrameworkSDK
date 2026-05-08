@@ -54,12 +54,19 @@ class LoggerBase:
         """新增一個輸出 adapter。"""
         self._adapters.append(adapter)
 
+    def add_adapter(self, adapter: LoggerAdapterBase) -> LoggerAdapterBase:
+        """新增一個輸出 adapter，並回傳該 adapter 方便呼叫端保留參考。"""
+        self.register_adapter(adapter)
+        return adapter
+
     def unregister_adapter(self, adapter: LoggerAdapterBase) -> None:
         """移除指定 adapter；若不存在則靜默忽略。"""
         try:
             self._adapters.remove(adapter)
         except ValueError:
             pass
+
+    remove_adapter = unregister_adapter
 
     def clear_adapters(self) -> None:
         """移除所有已註冊的 adapter。"""
@@ -71,9 +78,13 @@ class LoggerBase:
         """重新啟用 log 廣播。"""
         self._enabled = True
 
+    enable = enable_broadcast_msg
+
     def disable_broadcast_msg(self) -> None:
         """暫時停用 log 廣播（不影響 adapter 設定）。"""
         self._enabled = False
+
+    disable = disable_broadcast_msg
 
     # --- 核心 log 方法 --------------------------------------------------------
 
@@ -108,9 +119,9 @@ class LoggerBase:
         if level == "HIGHLIGHT":
             formatted = f"\n{indent}[{timestamp}] [{padded_level}]: 🚀🚀🚀 {message} 🚀🚀🚀"
         elif shine:
-            formatted = f"[{indent}{timestamp}] [{padded_level}]: ✨ {message} ✨"
+            formatted = f"{indent}[{timestamp}] [{padded_level}]: ✨ {message} ✨"
         else:
-            formatted = f"[{indent}{timestamp}] [{padded_level}]: {message}"
+            formatted = f"{indent}[{timestamp}] [{padded_level}]: {message}"
 
         # --- Fan-out to All Adapters ---
         for adapter in self._adapters:
