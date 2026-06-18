@@ -174,7 +174,7 @@ class ExcelIOAdapter(IIOAdapter):
         """
         from openpyxl import load_workbook
 
-        from ...excel_painter._format_snapshot import SheetFormatSnapshot
+        from ...excel_painter import SheetFormatSnapshot
 
         if not dest.exists():
             # File does not exist yet — fall back to fresh write

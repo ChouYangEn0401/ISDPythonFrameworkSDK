@@ -89,6 +89,7 @@ src/isd_py_framework_sdk/
 ├── file_compare/                 多格式檔案比對（unittest 輔助）
 ├── path_manager/                 集中式路徑管理（singleton registry）
 ├── unified_io/                   統一 IO 介面（IReader/IWriter adapter）
+├── excel_painter/                Excel 樣式工具（fluent ExcelPainter + 格式快照）
 ├── helpers/
 │   ├── assertions/               型別、值域、集合斷言
 │   ├── decorators/               10 個面向的裝飾器集合
@@ -163,6 +164,7 @@ src/isd_py_framework_sdk/
 | `helpers.decorators` | 10 個面向的裝飾器 | `isd_py_framework_sdk.decorators` |
 | `helpers.exceptions` | 10 個面向的例外 | `isd_py_framework_sdk.exceptions` |
 | `unified_io` | `IReader`, `IWriter`, `CsvIOAdapter`, `ExcelIOAdapter`, `JsonIOAdapter`, `SqlIOAdapter` | `isd_py_framework_sdk.unified_io` |
+| `excel_painter` | `ExcelPainter`, `save_styled_table`, `TableStyle`, `SheetFormatSnapshot`, `STATUS_*` | `isd_py_framework_sdk.excel_painter` |
 
 ---
 
@@ -171,4 +173,5 @@ src/isd_py_framework_sdk/
 - `DelayEventBusManager`（延遲事件匯流排）標記為 `==NEW-STRUCTURE-UNDONE==`，屬於未完成功能，設計仍在迭代中。
 - `path_manager` 在多進程（`multiprocessing`）下，每個子進程有獨立 singleton；需在子進程中重新設定，或未來透過 `to_dict()`/`from_dict()` 序列化（見 `path_manager/dev_plan.md` §6）。
 - `message_logger` 的 Tkinter adapter 只能在主執行緒使用 widget；跨執行緒 logging 需搭配 `widget.after()` + `queue.Queue`。
-- `unified_io/.env` 不應版控（已在 `.gitignore` 中排除）。
+- `unified_io/.env` 不應版控（`.gitignore` 以 `**/.env` 排除；該檔含真實 MSSQL 憑證，切勿提交）。
+- `excel_painter` 的 `mode="preserve"`（經由 `unified_io`）與 `SheetFormatSnapshot` 不保留 `CellRichText`／charts／images／conditional-formatting，只還原 cell style。
