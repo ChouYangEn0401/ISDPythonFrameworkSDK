@@ -1,0 +1,174 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+---
+
+## 專案概覽
+
+**ISD Python Framework SDK** (`isd-py-framework-sdk`) 是一套底層基礎框架套件，提供所有 ISD 系列模組共用的設計模式與工具。版本 `0.6.3`，Python ≥ 3.11。
+
+- pip 安裝名：`isd-py-framework-sdk`
+- Python import 名：`isd_py_framework_sdk`
+- 版本號格式：`BigChanges.VersionCode.HotfixOrUpdate`（定義在 `src/isd_py_framework_sdk/_version.py`）
+
+---
+
+## 開發環境建置
+
+```powershell
+# 建立並啟動虛擬環境
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+
+# 以可編輯模式安裝核心套件
+pip install -e .
+
+# 安裝所有 extras（包含測試工具）
+pip install -e ".[all]"
+```
+
+---
+
+## 建置與發布
+
+```powershell
+# 在 venv 啟動後執行（腳本會互動確認）
+.\builder__whl.ps1
+
+# 手動建置
+.venv\Scripts\python.exe -m build
+# 輸出到 dist/
+```
+
+版本號在發布前必須手動修改 `src/isd_py_framework_sdk/_version.py`。
+
+---
+
+## 測試
+
+```powershell
+# 執行全部測試（pytest）
+.venv\Scripts\python.exe -m pytest -v tests/
+
+# 執行單一測試檔
+.venv\Scripts\python.exe -m pytest -v tests/base/singleton_test.py
+.venv\Scripts\python.exe -m pytest -v tests/events/event_test.py
+.venv\Scripts\python.exe -m pytest -v tests/helpers/assertions_test.py
+.venv\Scripts\python.exe -m pytest -v tests/helpers/decorators_test.py
+.venv\Scripts\python.exe -m pytest -v tests/helpers/exceptions_test.py
+.venv\Scripts\python.exe -m pytest -v tests/path/test_path_manager.py
+
+# file_compare 測試
+.venv\Scripts\python.exe -m pytest -v tests/test_file/
+
+# monitoring 整合測試（非 pytest，直接執行）
+.venv\Scripts\python.exe examples/monitoring/different_usecase.py
+
+# logger 整合測試（非 pytest，需手動執行）
+.venv\Scripts\python.exe tests/logger/test__msg_logger.py
+.venv\Scripts\python.exe tests/logger/combined_logger.py
+```
+
+`test_runner.bat` 列出所有單元測試的逐一執行指令，可作為參考。
+
+---
+
+## 套件結構與架構
+
+```
+src/isd_py_framework_sdk/
+├── _version.py                   版本號（動態 setuptools 來源）
+├── __init__.py                   全部公開 API 的 flat 匯出點
+├── cli.py                        CLI 入口（isd-py-framework-sdk -V）
+│
+├── base/                         核心設計模式
+├── events/                       事件系統（observe / pub-sub）
+├── message_logger/               結構化 logger（adapter fan-out 架構）
+├── monitoring/                   迴圈計時器 & 進度顯示
+├── file_compare/                 多格式檔案比對（unittest 輔助）
+├── path_manager/                 集中式路徑管理（singleton registry）
+├── unified_io/                   統一 IO 介面（IReader/IWriter adapter）
+├── helpers/
+│   ├── assertions/               型別、值域、集合斷言
+│   ├── decorators/               10 個面向的裝飾器集合
+│   └── exceptions/               10 個面向的自訂例外集合
+└── window_design_helper/         Tkinter 視窗開發輔助工具
+```
+
+### 短路徑別名（Convenience shims）
+
+根層有幾個 flat 模組只做 re-export，讓呼叫端不用記深層路徑。這些是向下相容的薄包裝，**本體在子套件中**：
+
+| 薄包裝 | 實體位置 |
+|---|---|
+| `interface.py` | `→ base/`, `window_design_helper/` |
+| `events_bus.py` | `→ events/` |
+| `msg_logger.py` | `→ message_logger/` |
+| `assertions.py` | `→ helpers/assertions/` |
+| `decorators.py` | `→ helpers/decorators/` |
+| `exceptions.py` | `→ helpers/exceptions/` |
+
+新功能優先加到子套件；短路徑別名僅作向下相容保留，不在此擴充。
+
+---
+
+## 核心設計哲學
+
+### Singleton 模式
+`SingletonMetaclass`（`base/Singleton.py`）是所有 Singleton 的基石。只要 `metaclass=SingletonMetaclass`，類別首次建立後自動呼叫 `_initialize_manager()`（若存在），之後重複 `__call__` 回傳同一實例。`SingletonSystemLogger` 與 `SingletonPathManager` 均以此實作。
+
+### Adapter/Fan-out 架構（message_logger）
+`LoggerBase`（`message_logger/base/LoggerBase.py`）負責格式化與廣播；各 `LoggerAdapterBase` 子類持有各自的 `level_filter`，自行決定是否輸出。logger 對 adapter 種類完全不知情。
+
+### Extras 分層依賴策略
+預設安裝（`pip install isd-py-framework-sdk`）不包含任何 heavy 第三方依賴（`pandas`, `openpyxl`, `pyyaml`, `colorama`…）。使用者依需要安裝對應 extras：
+
+```
+[message_logger]      → colorama
+[file_compare.excel]  → openpyxl, pandas
+[file_compare.yaml]   → pyyaml
+[unified_io]          → pandas
+[unified_io.excel]    → pandas, openpyxl
+[unified_io.sql]      → pandas, sqlalchemy
+[excel_painter]       → openpyxl, wcwidth
+[dev]                 → pytest, black
+[all]                 → 全部
+```
+
+`file_compare/__init__.py` 使用 lazy import 延遲載入，確保不需要的 backend 不會在 import 時就失敗。
+
+### 環境變數控制
+| 變數 | 作用 |
+|---|---|
+| `RUN_MODE` | Logger 全域等級過濾：`DEBUG`（預設）/ `DISPLAY`（INFO+）/ `RUN`（ERROR+）|
+| `EVENT_MANAGER_DEBUGGER` | 設為 `1` 時，`SingletonEventManager` 印出詳細事件類型解析資訊 |
+| `VIRTUAL_ENV` | `PathMode.VIRTUAL_ENV` 與 build 腳本用來偵測 venv |
+
+---
+
+## 各子套件快速導覽
+
+每個子套件的 `agent.md` 有更深入的分析。以下是主要 import 路徑與進入點：
+
+| 子套件 | 主要類別/函式 | 推薦 import 路徑 |
+|---|---|---|
+| `base` | `SingletonMetaclass` | `isd_py_framework_sdk.interface` |
+| `events` | `SingletonEventManager`, `IEventBase`, `IParsEventBase`, `MulticastCallback`, `DelayEventBusManager` | `isd_py_framework_sdk.events` |
+| `message_logger` | `SingletonSystemLogger`, `get_logger`, `configure_logger`, `*Adapter` | `isd_py_framework_sdk.message_logger` |
+| `monitoring` | `LoopedFunctionTimer`, `MultiProcessLoopedFunctionTimer`, `LoopedFunction_timer_decorator` | `isd_py_framework_sdk.monitoring` |
+| `file_compare` | `compare_*_files` 系列函式 | `isd_py_framework_sdk.file_compare` |
+| `path_manager` | `SingletonPathManager`, `PathMode`, `Waterfall` | `isd_py_framework_sdk.path_manager` |
+| `helpers.assertions` | `assert__is_*` 系列 | `isd_py_framework_sdk.assertions` |
+| `helpers.decorators` | 10 個面向的裝飾器 | `isd_py_framework_sdk.decorators` |
+| `helpers.exceptions` | 10 個面向的例外 | `isd_py_framework_sdk.exceptions` |
+| `unified_io` | `IReader`, `IWriter`, `CsvIOAdapter`, `ExcelIOAdapter`, `JsonIOAdapter`, `SqlIOAdapter` | `isd_py_framework_sdk.unified_io` |
+
+---
+
+## 已知注意事項
+
+- `DelayEventBusManager`（延遲事件匯流排）標記為 `==NEW-STRUCTURE-UNDONE==`，屬於未完成功能，設計仍在迭代中。
+- `path_manager` 在多進程（`multiprocessing`）下，每個子進程有獨立 singleton；需在子進程中重新設定，或未來透過 `to_dict()`/`from_dict()` 序列化（見 `path_manager/dev_plan.md` §6）。
+- `message_logger` 的 Tkinter adapter 只能在主執行緒使用 widget；跨執行緒 logging 需搭配 `widget.after()` + `queue.Queue`。
+- `unified_io/.env` 不應版控（已在 `.gitignore` 中排除）。
