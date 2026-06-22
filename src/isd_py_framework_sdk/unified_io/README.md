@@ -51,6 +51,26 @@ adapter.write(df_updated, "report.xlsx", sheet_name="Data")
 | `"fresh"`（預設）| `to_excel` 重寫整張 sheet | 最快，**不保留**既有格式 |
 | `"inplace"` | 只更新資料範圍的儲存格值 | 保留其餘格式；DataFrame 欄數需與既有 sheet 相符 |
 | `"preserve"` | 擷取格式快照→重寫→還原 | 透過 `excel_painter.SheetFormatSnapshot` 保留 fills/字型/欄寬/凍結/合併；只刷新值、保留手工版面 |
+| `"styled"`（或傳 `style=`）| 透過 `excel_painter.save_styled_table` 邊寫邊排版 | 表頭色帶＋框線＋凍結＋autofilter＋欄寬/wrap＋狀態色碼，一步到位 |
+
+### 與 `excel_painter` 的聯通
+
+IO 層負責「資料搬運」，`excel_painter` 負責「呈現」。兩者透過 Excel adapter 連通：
+
+```python
+from isd_py_framework_sdk.unified_io import DataIO
+from isd_py_framework_sdk.excel_painter import STATUS_GREEN, STATUS_RED
+
+# 直接用 IO 介面輸出「專業排版」的 Excel（內部委派給 excel_painter）
+DataIO.write(
+    df, "report.xlsx",
+    style=True,                                   # 啟用排版（也可傳 TableStyle）
+    widths={"Name": 20}, wrap_cols=["說明"], text_cols=["ISI_ID"],
+    status_column="狀態", status_fills={"✅完成": STATUS_GREEN, "❌失敗": STATUS_RED},
+)
+```
+
+`mode="preserve"` 同樣依賴 `excel_painter` 的 `SheetFormatSnapshot`。範例見 `examples/excel_painter/io_integration.py`。
 
 ## 依賴 Extras
 

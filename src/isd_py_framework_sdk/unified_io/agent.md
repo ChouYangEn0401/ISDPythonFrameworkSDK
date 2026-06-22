@@ -85,6 +85,15 @@ class IIOAdapter(IReader, IWriter, ABC): ...
 - `"fresh"`（預設）：`to_excel` 整張重寫，最快，不保留格式。
 - `"inplace"`：開既有 workbook 只改資料範圍儲存格值，保留其餘格式（含範圍外 CellRichText）。欄數需與既有 sheet 相符。**自包含、可用**。
 - `"preserve"`：擷取格式快照→重寫→還原。**已可用**——`_write_preserve` 透過 `isd_py_framework_sdk.excel_painter.SheetFormatSnapshot` 保留 fills/字型/欄寬/凍結/合併，只刷新儲存格值。檔案不存在時 fallback 到 `fresh`；sheet 不存在時以 append 寫新分頁。
+- `"styled"`（或在 `write()` 傳 `style=`）：`_write_styled` 委派給 `excel_painter.save_styled_table`，邊寫邊套用表格樣式（表頭色帶/框線/凍結/autofilter/欄寬/wrap/狀態色碼）。`style` 接受 `TableStyle` 或 `True`（預設外觀）；其餘 styling 選項（`widths`/`wrap_cols`/`text_cols`/`status_column`/`status_fills`/`auto_width`…）由 `**kwargs` 直通。
+
+### 與 excel_painter 的聯通（架構分工）
+
+`unified_io` = 資料搬運（DataFrame in/out，格式不可知）；`excel_painter` = 呈現（排版上色）。連通點只在 Excel adapter：
+- `preserve` → `excel_painter.SheetFormatSnapshot.capture/restore`
+- `styled` / `style=` → `excel_painter.save_styled_table`
+
+其餘 adapter（CSV/JSON/SQL）與 `excel_painter` 無關，維持輕量。範例：`examples/excel_painter/io_integration.py`。
 
 ---
 
