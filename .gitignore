@@ -19,6 +19,9 @@ env/
 .env
 **/.env
 
+# Generated example outputs (reproducible via the example scripts)
+examples/**/output/
+
 # PyCharm project files
 .idea/
 

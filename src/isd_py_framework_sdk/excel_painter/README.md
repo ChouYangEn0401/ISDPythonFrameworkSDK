@@ -35,6 +35,31 @@ save_styled_table(
 
 `style_existing(path, ...)` 則是開啟既有檔 → 套樣式 → 存回。
 
+## 專業報表模板（一行產出）
+
+常見報表已函式化（`templates.py`），不必自己組鏈：
+
+```python
+from isd_py_framework_sdk.excel_painter import (
+    status_report, summary_statistics_report, multi_sheet_report, diff_highlight_report,
+)
+
+# 1) 狀態色碼結果表（+ 自動統計摘要分頁；status_fills 省略時自動依 ✅/⚠/❌ 推斷）
+status_report(df, "out.xlsx", status_column="回填狀態", title="NA 回填結果",
+              wrap_cols=["AI說明"], text_cols=["ISI_ID"])
+
+# 2) 數值統計表（數值欄熱力圖漸層 + 總計列）
+summary_statistics_report(df, "out.xlsx", numeric_cols=["2023", "2024"], label_col="系所")
+
+# 3) 多分頁活頁簿（每頁套表格樣式 + 自動「總覽」索引頁）
+multi_sheet_report({"已解決": df1, "未解決": df2}, "out.xlsx")
+
+# 4) 逐列詞彙差異高亮（LCS / 共同詞）
+diff_highlight_report(df, "out.xlsx", column_pairs=[("原始地址", "比中地址")])
+```
+
+範例藝廊：`examples/excel_painter/generate_templates.py` 會在 `examples/excel_painter/output/` 產出 5 個專業範例檔，可直接開來看效果。
+
 ## 能力一覽
 
 | 類別 | 方法 / 物件 |
@@ -53,6 +78,20 @@ save_styled_table(
 `TableStyle` 為宣告式樣式（深藍表頭＋白粗體＋thin 灰框線＋凍結＋autofilter 為預設）。提供 `blue_table()` 與 `minimal_table()` 兩個現成變體，也可自行調整欄位（`banded=True` 開斑馬紋等）。
 
 狀態色彩常數：`STATUS_GREEN` / `STATUS_AMBER` / `STATUS_RED` / `STATUS_GREY`，皆為 `(底色, 字色)` tuple。
+
+## 與 `unified_io` 的整合
+
+`unified_io`（資料 IO 層）可直接委派給本套件做排版：
+
+```python
+from isd_py_framework_sdk.unified_io import DataIO
+DataIO.write(df, "report.xlsx", style=True, widths={"Name": 20}, status_column="狀態", ...)
+```
+
+- `DataIO.write(..., style=...)` / `mode="styled"` → 委派 `save_styled_table`
+- `DataIO.write(..., mode="preserve")` → 使用本套件的 `SheetFormatSnapshot`
+
+範例：`examples/excel_painter/io_integration.py`。
 
 ## 依賴
 

@@ -35,6 +35,13 @@ One-shot::
 from ._format_snapshot import SheetFormatSnapshot
 from .painter import ExcelPainter
 from .convenience import save_styled_table, style_existing
+from .templates import (
+    auto_status_fills,
+    status_report,
+    summary_statistics_report,
+    multi_sheet_report,
+    diff_highlight_report,
+)
 from .styles import (
     TableStyle,
     StatusFills,
@@ -67,6 +74,12 @@ __all__ = [
     # Convenience
     "save_styled_table",
     "style_existing",
+    # Templates (functionalised common reports)
+    "auto_status_fills",
+    "status_report",
+    "summary_statistics_report",
+    "multi_sheet_report",
+    "diff_highlight_report",
     # Styles
     "TableStyle",
     "StatusFills",

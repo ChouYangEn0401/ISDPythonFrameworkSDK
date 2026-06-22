@@ -100,9 +100,10 @@ class ExcelPainter:
 
         r = start_row
         for row in dataframe_to_rows(df, index=index, header=header):
-            # dataframe_to_rows emits a stray empty row between header and data
-            # when index=True; skip blank-only rows defensively.
-            if row == [None]:
+            # openpyxl emits a stray ``[None]`` separator between the header and
+            # data only when BOTH index and header are written — skip just that
+            # one, never a legitimate single-column None data row.
+            if index and header and row == [None]:
                 continue
             for c, val in enumerate(row, 1):
                 self.ws.cell(row=r, column=c, value=_to_native(val))
@@ -214,6 +215,40 @@ class ExcelPainter:
                 cell.fill = fill(color)
         return self
 
+    def color_scale(
+        self,
+        column: ColumnRef,
+        *,
+        low_color: str = "FFFFFF",
+        high_color: str = "63BE7B",
+        header_row: int = 1,
+        min_value: Optional[float] = None,
+        max_value: Optional[float] = None,
+    ) -> "ExcelPainter":
+        """Heat-map a numeric column: linearly blend ``low_color``→``high_color``.
+
+        Non-numeric cells are skipped.  ``min_value``/``max_value`` override the
+        auto-detected data range (useful for a fixed 0..100 scale).
+        """
+        ci = self._col(column, header_row)
+        values: list[tuple[int, float]] = []
+        for r in range(header_row + 1, self.ws.max_row + 1):
+            v = self.ws.cell(row=r, column=ci).value
+            try:
+                values.append((r, float(v)))
+            except (TypeError, ValueError):
+                continue
+        if not values:
+            return self
+
+        lo = min_value if min_value is not None else min(v for _, v in values)
+        hi = max_value if max_value is not None else max(v for _, v in values)
+        span = (hi - lo) or 1.0
+        for r, v in values:
+            t = max(0.0, min(1.0, (v - lo) / span))
+            self.ws.cell(row=r, column=ci).fill = fill(_blend(low_color, high_color, t))
+        return self
+
     # ── Widths / structure ─────────────────────────────────────────────────────
 
     def set_widths(self, widths: dict, *, header_row: int = 1) -> "ExcelPainter":
@@ -279,6 +314,49 @@ class ExcelPainter:
             ci = self._col(col, header_row)
             for r in range(header_row + 1, self.ws.max_row + 1):
                 self.ws.cell(row=r, column=ci).number_format = fmt
+        return self
+
+    def title_banner(
+        self,
+        text: str,
+        *,
+        row: int = 1,
+        n_cols: Optional[int] = None,
+        fill_color: str = "1F3864",
+        font_color: str = "FFFFFF",
+        size: float = 14,
+        height: float = 30,
+    ) -> "ExcelPainter":
+        """Merge a bold title banner across the top *row* of the table."""
+        from openpyxl.utils import get_column_letter as _gcl
+        from .styles import font as _font
+
+        n = n_cols or self.ws.max_column or 1
+        self.ws.merge_cells(f"A{row}:{_gcl(n)}{row}")
+        cell = self.ws.cell(row=row, column=1, value=text)
+        cell.fill = fill(fill_color)
+        cell.font = _font(color=font_color, bold=True, size=size)
+        cell.alignment = align(horizontal="center", vertical="center")
+        self.ws.row_dimensions[row].height = height
+        return self
+
+    def style_row(
+        self,
+        row: int,
+        *,
+        fill_color: Optional[str] = None,
+        font_color: Optional[str] = None,
+        bold: bool = False,
+    ) -> "ExcelPainter":
+        """Apply a fill / font to every used cell in *row* (e.g. a totals row)."""
+        from .styles import font as _font
+
+        for c in range(1, self.ws.max_column + 1):
+            cell = self.ws.cell(row=row, column=c)
+            if fill_color:
+                cell.fill = fill(fill_color)
+            if font_color or bold:
+                cell.font = _font(color=font_color, bold=bold)
         return self
 
     # ── The big one: styled table ───────────────────────────────────────────────
@@ -442,6 +520,14 @@ class ExcelPainter:
 
 
 # ── Module helpers ───────────────────────────────────────────────────────────
+
+def _blend(c1: str, c2: str, t: float) -> str:
+    """Linear blend between two ``RRGGBB`` hex colours; ``t`` in [0, 1]."""
+    a = (int(c1[0:2], 16), int(c1[2:4], 16), int(c1[4:6], 16))
+    b = (int(c2[0:2], 16), int(c2[2:4], 16), int(c2[4:6], 16))
+    r, g, bl = (round(a[i] + (b[i] - a[i]) * t) for i in range(3))
+    return f"{r:02X}{g:02X}{bl:02X}"
+
 
 def _free_path(path: Path) -> Path:
     """Return *path*, or a timestamped sibling if *path* is locked."""

@@ -16,7 +16,13 @@ $env:PYTHONPATH="src"; .venv\Scripts\python.exe -c "from isd_py_framework_sdk.ex
 
 把 openpyxl 的樣式操作包成「load 一次 → 鏈式套用 → save 一次」的 `ExcelPainter`，並提供宣告式 `TableStyle`、條件填色、CJK 自動欄寬、格式快照、文字差異上色。
 
-`unified_io` 的 Excel `mode="preserve"` 依賴本套件的 `SheetFormatSnapshot`（`from ...excel_painter import SheetFormatSnapshot`）。
+### 與 unified_io 的雙向聯通
+
+`unified_io` 的 Excel adapter 在兩處委派本套件（連通點僅此）：
+- `mode="preserve"` → `SheetFormatSnapshot`（`from ...excel_painter import SheetFormatSnapshot`）
+- `mode="styled"` / 傳 `style=` → `save_styled_table`
+
+分工：`unified_io` 管資料搬運（格式不可知），`excel_painter` 管呈現。本套件**不**反向 import `unified_io`（避免循環）。範例：`examples/excel_painter/io_integration.py`。
 
 ---
 
@@ -26,6 +32,7 @@ $env:PYTHONPATH="src"; .venv\Scripts\python.exe -c "from isd_py_framework_sdk.ex
 excel_painter/
 ├── __init__.py          flat 匯出全部公開 API
 ├── painter.py           ExcelPainter（fluent 核心，每個方法回傳 self）
+├── templates.py         函式化的專業報表模板（status_report / summary_statistics_report / multi_sheet_report / diff_highlight_report + auto_status_fills）
 ├── convenience.py       save_styled_table / style_existing（函式便利層）
 ├── styles.py            TableStyle、fill/font/box/side/align、STATUS_* 常數、預設變體
 ├── width.py             display_width（wcwidth 選用 + unicodedata fallback）、auto_resize
