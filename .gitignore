@@ -15,6 +15,13 @@ env/
 .venv/
 .env.need_to_be_ignore/
 
+# Secrets — never commit .env files (e.g. unified_io/.env holds live DB creds)
+.env
+**/.env
+
+# Generated example outputs (reproducible via the example scripts)
+examples/**/output/
+
 # PyCharm project files
 .idea/
 

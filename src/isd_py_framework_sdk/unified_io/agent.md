@@ -1,27 +1,34 @@
 # agent.md — `unified_io` 套件
 
-## ⚠️ 目前狀態：非功能性 stub（2026-06 重新驗證）
+## 目前狀態：已實作可用（2026-06 重新驗證，io_module 合併後）
 
-實際檢查 `adapters/` 下的檔案後發現**目前整個套件無法被 import**：
+整個套件可正常 import 並完成 round-trip。先前版本的 agent.md 描述的「空檔案 stub」狀態**已過時**——所有 adapter 皆已實作。
 
-| 檔案 | 大小 | 狀態 |
-|---|---|---|
-| `csv_adapter.py` | 0 bytes | 完全空白，`CsvIOAdapter` 不存在 |
-| `json_adapter.py` | 0 bytes | 完全空白，`JsonIOAdapter` 不存在 |
-| `sql_adapter.py` | 0 bytes | 完全空白，`SqlIOAdapter` 不存在 |
-| `excel_adapter.py` | 443 bytes | 只有 `class ExcelIOAdapter(IIOAdapter):` 簽名，**沒有 class body** → `IndentationError`（已用 `python -m py_compile` 確認） |
+| 檔案 | 狀態 |
+|---|---|
+| `data_io.py` | ✅ `DataIO` façade（auto 格式判斷 + 各格式便利方法）|
+| `adapters/_interface.py` | ✅ `IReader` / `IWriter` / `IIOAdapter`（ABC）|
+| `adapters/csv_adapter.py` | ✅ `CsvIOAdapter` |
+| `adapters/excel_adapter.py` | ✅ `ExcelIOAdapter`（`fresh` / `inplace` / `preserve` 皆可用）|
+| `adapters/json_adapter.py` | ✅ `JsonIOAdapter`（JSON + JSONL）|
+| `adapters/sql_adapter.py` | ✅ `SqlIOAdapter` |
+| `legacy.sql_writer.py` | ⚠️ 舊版獨立 Tkinter 上傳腳本，非套件 API，可考慮刪除 |
 
-而 `adapters/__init__.py` 對這四個全部執行 `from .xxx_adapter import XxxIOAdapter`，所以**任何** `from isd_py_framework_sdk.unified_io.adapters import ...` 都會在載入 `excel_adapter.py` 時就因 `IndentationError` 失敗（在它失敗之前，`csv_adapter`/`json_adapter`/`sql_adapter` 本來就會因為 `ImportError: cannot import name 'XxxIOAdapter'` 失敧）。
+驗證指令（src 在 path 上）：
 
-**修改任何使用此套件的程式碼前，務必先確認這個狀態是否已經改變**（重新跑一次 `python -m py_compile src/isd_py_framework_sdk/unified_io/adapters/*.py`）。下面的「核心介面」與「具體 Adapter」章節描述的是**設計意圖**（從 `_interface.py` 與檔案/extras 命名推斷），不是目前可執行的程式碼。
+```powershell
+$env:PYTHONPATH="src"; .venv\Scripts\python.exe -c "from isd_py_framework_sdk.unified_io import DataIO; import pandas as pd; DataIO.write(pd.DataFrame({'a':[1]}), 't.csv'); print(DataIO.read('t.csv').shape)"
+```
 
 ---
 
-## 職責（設計意圖）
+## 職責
 
-提供統一的資料 IO 介面（`IReader` / `IWriter`），讓上層業務邏輯不需關心底層格式（CSV、Excel、JSON、SQL），只需操作 `pandas.DataFrame`。
+提供統一的資料 IO 介面，讓上層業務邏輯不需關心底層格式（CSV、Excel、JSON/JSONL、SQL），一律以 `pandas.DataFrame` 作為中間格式。
 
-**注意：** 此套件目前尚在早期階段，沒有對應的 `__init__.py` 在 `isd_py_framework_sdk` 根層匯出（只有 `pyproject.toml` 中的 extras 定義，但根 `__init__.py` 沒有匯入它）。需要直接從 `isd_py_framework_sdk.unified_io` import。
+`unified_io` 與 `file_compare` **不重疊**：前者負責讀寫資料，後者是 unittest 用的檔案內容比對（`compare_*_files`）。專案中目前沒有其他通用資料 IO 模組，因此本套件並非冗餘。
+
+> 根層 `__init__.py` 不 re-export `unified_io`；請以完整路徑 `from isd_py_framework_sdk.unified_io import ...` 匯入（CLAUDE.md 快速導覽表亦如此標示）。
 
 ---
 
@@ -29,115 +36,80 @@
 
 ```
 unified_io/
-├── .env                           環境設定（不版控，不應 commit）
+├── __init__.py          匯出 DataIO, 四個 Adapter, 三個介面
+├── data_io.py           DataIO façade（_resolve_adapter 依副檔名選 adapter）
+├── .env                 SQL 連線機密（不版控）
+├── legacy.sql_writer.py 舊版 Tkinter 腳本（非 API）
 └── adapters/
-    ├── __init__.py               匯出 CsvIOAdapter, ExcelIOAdapter, JsonIOAdapter, SqlIOAdapter
-    ├── _interface.py             IReader, IWriter, IIOAdapter（ABC 定義）
-    ├── csv_adapter.py            CsvIOAdapter
-    ├── excel_adapter.py          ExcelIOAdapter
-    ├── json_adapter.py           JsonIOAdapter
-    └── sql_adapter.py            SqlIOAdapter
+    ├── __init__.py      匯出 CsvIOAdapter, ExcelIOAdapter, JsonIOAdapter, SqlIOAdapter
+    ├── _interface.py    IReader, IWriter, IIOAdapter（ABC）
+    ├── csv_adapter.py
+    ├── excel_adapter.py
+    ├── json_adapter.py
+    └── sql_adapter.py
 ```
+
+`DataIO.read/write` 流程：`format="auto"` 時依 `Path(source).suffix` 對照 `_EXT_MAP` 選擇 adapter；帶 `engine=` 或 `format="sql"` 時走 `SqlIOAdapter`。
 
 ---
 
 ## 核心介面
 
 ```python
-from isd_py_framework_sdk.unified_io.adapters._interface import IReader, IWriter, IIOAdapter
-import pandas as pd
-from pathlib import Path
+from isd_py_framework_sdk.unified_io import IReader, IWriter, IIOAdapter
 
 class IReader(ABC):
-    def read(self, source: str | Path | Any, **kwargs) -> pd.DataFrame: ...
+    def read(self, source, **kwargs) -> pd.DataFrame: ...
 
 class IWriter(ABC):
-    def write(self, df: pd.DataFrame, destination: str | Path | Any, **kwargs) -> None: ...
+    def write(self, df, destination, **kwargs) -> None: ...
 
 class IIOAdapter(IReader, IWriter, ABC): ...
 ```
 
-所有 adapter 皆以 `pd.DataFrame` 作為中間格式，讓讀/寫的資料型別統一。
+所有 adapter 皆以 `pd.DataFrame` 為中間格式。
 
 ---
 
 ## 具體 Adapter
 
-```python
-from isd_py_framework_sdk.unified_io.adapters import (
-    CsvIOAdapter,
-    ExcelIOAdapter,
-    JsonIOAdapter,
-    SqlIOAdapter,
-)
-```
+| Adapter | 讀 | 寫 | extras | 備註 |
+|---|---|---|---|---|
+| `CsvIOAdapter` | `pd.read_csv` | `to_csv`（`index=False`）| `[unified_io]` | |
+| `ExcelIOAdapter` | `pd.read_excel` | 見下方寫入模式 | `[unified_io.excel]` | import 時檢查 openpyxl |
+| `JsonIOAdapter` | `pd.read_json` | `to_json`（`orient="records"`）| `[unified_io]` | `lines=True` → JSONL |
+| `SqlIOAdapter` | `pd.read_sql` | `to_sql`（`if_exists="append"`）| `[unified_io.sql]` | engine 可由 constructor 或 `engine=` 傳入 |
 
-| Adapter | 讀來源 | 寫目標 | 需要 extras |
-|---|---|---|---|
-| `CsvIOAdapter` | CSV 檔案路徑 | CSV 檔案路徑 | `[unified_io]`（pandas）|
-| `ExcelIOAdapter` | xlsx 路徑 | xlsx 路徑 | `[unified_io.excel]`（pandas + openpyxl）|
-| `JsonIOAdapter` | JSON 檔案路徑 | JSON 檔案路徑 | `[unified_io]`（pandas）|
-| `SqlIOAdapter` | SQL query string | table name | `[unified_io.sql]`（pandas + sqlalchemy）|
+### Excel 寫入模式
 
----
+- `"fresh"`（預設）：`to_excel` 整張重寫，最快，不保留格式。
+- `"inplace"`：開既有 workbook 只改資料範圍儲存格值，保留其餘格式（含範圍外 CellRichText）。欄數需與既有 sheet 相符。**自包含、可用**。
+- `"preserve"`：擷取格式快照→重寫→還原。**已可用**——`_write_preserve` 透過 `isd_py_framework_sdk.excel_painter.SheetFormatSnapshot` 保留 fills/字型/欄寬/凍結/合併，只刷新儲存格值。檔案不存在時 fallback 到 `fresh`；sheet 不存在時以 append 寫新分頁。
+- `"styled"`（或在 `write()` 傳 `style=`）：`_write_styled` 委派給 `excel_painter.save_styled_table`，邊寫邊套用表格樣式（表頭色帶/框線/凍結/autofilter/欄寬/wrap/狀態色碼）。`style` 接受 `TableStyle` 或 `True`（預設外觀）；其餘 styling 選項（`widths`/`wrap_cols`/`text_cols`/`status_column`/`status_fills`/`auto_width`…）由 `**kwargs` 直通。
 
-## 使用範例（⚠️ 設計意圖，目前無法執行 — 見上方狀態章節）
+### 與 excel_painter 的聯通（架構分工）
 
-```python
-from isd_py_framework_sdk.unified_io.adapters import CsvIOAdapter, ExcelIOAdapter
-from pathlib import Path
+`unified_io` = 資料搬運（DataFrame in/out，格式不可知）；`excel_painter` = 呈現（排版上色）。連通點只在 Excel adapter：
+- `preserve` → `excel_painter.SheetFormatSnapshot.capture/restore`
+- `styled` / `style=` → `excel_painter.save_styled_table`
 
-# 讀取
-adapter = CsvIOAdapter()
-df = adapter.read("data/input.csv")
-
-# 寫入
-adapter.write(df, Path("data/output.csv"))
-
-# 使用 IIOAdapter 泛型介面
-from isd_py_framework_sdk.unified_io.adapters._interface import IIOAdapter
-
-def process(adapter: IIOAdapter, src: Path, dst: Path):
-    df = adapter.read(src)
-    # ... transform ...
-    adapter.write(df, dst)
-```
+其餘 adapter（CSV/JSON/SQL）與 `excel_painter` 無關，維持輕量。範例：`examples/excel_painter/io_integration.py`。
 
 ---
 
-## 依賴 Extras
+## 已知注意事項 / 待辦
 
-```bash
-# 核心（CSV + JSON）
-pip install isd-py-framework-sdk[unified_io]
-
-# Excel 後端
-pip install isd-py-framework-sdk["unified_io.excel"]
-
-# SQL 後端
-pip install isd-py-framework-sdk["unified_io.sql"]
-```
-
----
-
-## `.env` 檔案
-
-`unified_io/.env` 是 SQL adapter 的連線字串等機密設定，**不應版控**（已在 `.gitignore` 中）。`.env.need_to_be_ignore` 在根目錄是提醒佔位符。
+- **`preserve` 模式依賴 `excel_painter.SheetFormatSnapshot`**（同 repo 的 sibling 子套件，已實作）。需要 `[unified_io.excel]` 或 `[excel_painter]` extra（openpyxl）。
+- **沒有 pytest 測試檔**。建議在 `tests/` 補上 round-trip 測試（CSV/JSON/JSONL/Excel-fresh/inplace/preserve）。
+- `pandas` 是所有 adapter 的必要依賴；openpyxl / sqlalchemy 在對應 adapter 內 lazy 檢查並給出安裝提示。
+- `legacy.sql_writer.py` 為舊腳本（含 Tkinter GUI、硬編 batch 邏輯），非套件 API，可移除以減少混淆。
+- `.env` 含真實 MSSQL 連線憑證；已於 `.gitignore` 以 `**/.env` 排除——切勿提交。
 
 ---
 
 ## 擴充新格式
 
-1. 在 `adapters/` 下新增 `<format>_adapter.py`
-2. 繼承 `IIOAdapter`，實作 `read()` 和 `write()`
-3. 在 `adapters/__init__.py` 匯出
-4. 若有外部依賴，在 `pyproject.toml` 新增 extras
-
----
-
-## 常見陷阱
-
-- **最重要：`adapters/__init__.py` 目前無法被 import**（見頂部狀態章節），任何依賴 `unified_io.adapters` 的程式碼都會在 import 階段就失敗。在這裡投入開發時間前，先確認此狀態。
-- `pandas` 是所有 adapter 的必要依賴，未安裝時 import 就會失敗（不是 lazy 的）
-- `unified_io` 目前沒有 pytest 測試檔（尚未完善測試覆蓋）——這與上述空檔案狀態相符，暗示此套件從未被完整實作或測試過
-- 根層 `__init__.py` **不**匯出 `unified_io` 的任何內容，必須直接用完整路徑 import
+1. 在 `adapters/` 新增 `<format>_adapter.py`，繼承 `IIOAdapter` 實作 `read()` / `write()`。
+2. 在 `adapters/__init__.py` 與 `unified_io/__init__.py` 匯出。
+3. 在 `data_io.py` 的 `_EXT_MAP` 註冊副檔名（若需 auto 判斷）。
+4. 有外部依賴時於 `pyproject.toml` 新增 extras。

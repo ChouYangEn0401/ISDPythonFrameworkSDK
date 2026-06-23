@@ -36,6 +36,16 @@ Write modes
     CellRichText outside the written range is fully preserved.
 
     Use this when only values change and the sheet structure is stable.
+
+``"styled"`` (or pass ``style=``)
+    Bridge to :mod:`isd_py_framework_sdk.excel_painter` — write *and* format
+    the table in one step (header band, borders, frozen header, autofilter,
+    per-column widths/wrap, optional status colours).  Styling options
+    (``widths``, ``wrap_cols``, ``text_cols``, ``status_column``,
+    ``status_fills``, ``auto_width`` …) pass straight through.  This is the
+    link between the IO layer (data movement) and the painting layer
+    (presentation); ``preserve`` mode also relies on excel_painter's
+    ``SheetFormatSnapshot``.
 """
 from __future__ import annotations
 
@@ -50,7 +60,7 @@ _MISSING_MSG = (
     "Install with:  pip install isd-py-framework-sdk[unified_io.excel]"
 )
 
-WriteMode = Literal["fresh", "preserve", "inplace"]
+WriteMode = Literal["fresh", "preserve", "inplace", "styled"]
 
 
 class ExcelIOAdapter(IIOAdapter):
@@ -102,6 +112,7 @@ class ExcelIOAdapter(IIOAdapter):
         sheet_name: str = "Sheet1",
         mode: Optional[WriteMode] = None,
         index: bool = False,
+        style=None,
         **kwargs,
     ) -> None:
         """
@@ -114,10 +125,18 @@ class ExcelIOAdapter(IIOAdapter):
         sheet_name
             Target worksheet name.
         mode
-            Write mode — ``"fresh"``, ``"preserve"``, or ``"inplace"``.
-            Overrides the adapter-level default.
+            Write mode — ``"fresh"``, ``"preserve"``, ``"inplace"``, or
+            ``"styled"``.  Overrides the adapter-level default.
         index
             Whether to write the DataFrame index.
+        style
+            When given (a
+            :class:`~isd_py_framework_sdk.excel_painter.TableStyle`, or ``True``
+            for the default look), the write is routed through
+            :func:`~isd_py_framework_sdk.excel_painter.save_styled_table` to
+            produce a professionally formatted table.  Extra styling options
+            (``widths``, ``wrap_cols``, ``text_cols``, ``status_column``,
+            ``status_fills``, ``auto_width`` …) pass straight through ``**kwargs``.
         **kwargs
             Additional options forwarded to the underlying writer.
         """
@@ -129,6 +148,11 @@ class ExcelIOAdapter(IIOAdapter):
         effective_mode: WriteMode = mode or self._default_mode
         dest = Path(destination)
 
+        # A supplied style (or mode="styled") bridges into excel_painter.
+        if style is not None or effective_mode == "styled":
+            self._write_styled(df, dest, sheet_name, index, style, **kwargs)
+            return
+
         if effective_mode == "fresh":
             self._write_fresh(df, dest, sheet_name, index, **kwargs)
         elif effective_mode == "preserve":
@@ -138,8 +162,29 @@ class ExcelIOAdapter(IIOAdapter):
         else:
             raise ValueError(
                 f"Unknown write mode {effective_mode!r}.  "
-                "Choose 'fresh', 'preserve', or 'inplace'."
+                "Choose 'fresh', 'preserve', 'inplace', or 'styled'."
             )
+
+    def _write_styled(
+        self,
+        df: pd.DataFrame,
+        dest: Path,
+        sheet_name: str,
+        index: bool,
+        style,
+        **kwargs,
+    ) -> None:
+        """Bridge to excel_painter for a fully styled table write."""
+        from ...excel_painter import TableStyle, save_styled_table
+
+        table_style = style if isinstance(style, TableStyle) else None
+        save_styled_table(
+            df, dest,
+            sheet_name=sheet_name,
+            style=table_style,
+            index=index,
+            **kwargs,
+        )
 
     # ── Private write implementations ─────────────────────────────────────
 
@@ -174,7 +219,7 @@ class ExcelIOAdapter(IIOAdapter):
         """
         from openpyxl import load_workbook
 
-        from ...excel_painter._format_snapshot import SheetFormatSnapshot
+        from ...excel_painter import SheetFormatSnapshot
 
         if not dest.exists():
             # File does not exist yet — fall back to fresh write
