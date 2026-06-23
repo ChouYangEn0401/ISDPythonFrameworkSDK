@@ -81,6 +81,23 @@ excel_painter = [
     "wcwidth>=0.2",
 ]
 
+# Encryption toolkit — core (AES-256-GCM / ChaCha20-Poly1305 / scrypt / PBKDF2 / RSA)
+cipher_kit = [
+    "cryptography>=42",
+]
+
+# cipher_kit — Argon2id KDF backend (memory-hard, recommended)
+"cipher_kit.argon2" = [
+    "cryptography>=42",
+    "argon2-cffi>=23",
+]
+
+# cipher_kit — OS secure-store key source (Windows Credential Manager / Keychain / Secret Service)
+"cipher_kit.keyring" = [
+    "cryptography>=42",
+    "keyring>=24",
+]
+
 # Credential / config loader — core (.env support; JSON + os.environ need no extras)
 credential_vault = [
     "python-dotenv>=1.0",
@@ -93,7 +110,7 @@ credential_vault = [
 ]
 
 # All-including convenience (dev + file_compare + message_logger + unified_io + excel_painter
-# + credential_vault)
+# + cipher_kit + credential_vault)
 all = [
     "pytest>=7.0",
     "black>=24.0",
@@ -103,6 +120,9 @@ all = [
     "colorama>=0.4.6",
     "sqlalchemy>=2.0",
     "wcwidth>=0.2",
+    "cryptography>=42",
+    "argon2-cffi>=23",
+    "keyring>=24",
     "python-dotenv>=1.0",
 ]
 
