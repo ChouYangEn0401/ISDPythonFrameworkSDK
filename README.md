@@ -43,7 +43,9 @@ isd_py_framework_sdk/
 ├── monitoring/                 # 迴圈計時器與進度條
 ├── file_compare/              # 多格式檔案比對工具
 ├── path_manager/              # 中心化路徑管理
-├── unified_io/                # 統一資料 IO 介面（開發中）
+├── unified_io/                # 統一資料 IO 介面
+├── excel_painter/             # Excel 樣式工具（fluent ExcelPainter + 格式快照）
+├── credential_vault/          # 祕密載入（env/yaml/json/SYS_ENV + 透明解密）
 ├── window_design_helper/      # Tkinter 視窗開發輔助工具
 ├── helpers/                   # 工具集
 │   ├── assertions/            # 斷言（型別 / 值域 / 集合）
@@ -70,7 +72,9 @@ isd_py_framework_sdk/
 - `isd_py_framework_sdk.file_compare` — 多格式檔案比對工具（`compare_*` 函式）
 - `isd_py_framework_sdk.path_manager` — 中心化路徑管理（`SingletonPathManager`, `PathMode`, `Waterfall`）
 - `isd_py_framework_sdk.helpers.assertions` / `.decorators` / `.exceptions` — 工具集三兄弟
-- `isd_py_framework_sdk.unified_io` — 統一資料 IO 介面（開發中，目前不可用）
+- `isd_py_framework_sdk.unified_io` — 統一資料 IO 介面（`DataIO`, `*IOAdapter`）
+- `isd_py_framework_sdk.excel_painter` — Excel 樣式工具（`ExcelPainter`, `save_styled_table`）
+- `isd_py_framework_sdk.credential_vault` — 祕密載入（`CredentialVault`, `load_secret`）
 
 備註：為了向下相容，套件仍提供便捷短檔（例如 `interface.py`, `events_bus.py`, `msg_logger.py` 等），但文件與範例會以真實 module 名稱為主，避免混淆。
 
@@ -89,7 +93,9 @@ isd_py_framework_sdk/
 | `file_compare` | [README](src/isd_py_framework_sdk/file_compare/README.md) | [agent.md](src/isd_py_framework_sdk/file_compare/agent.md) |
 | `path_manager` | [README](src/isd_py_framework_sdk/path_manager/README.md) | [agent.md](src/isd_py_framework_sdk/path_manager/agent.md) |
 | `helpers`（assertions/decorators/exceptions） | [README](src/isd_py_framework_sdk/helpers/README.md) | [agent.md](src/isd_py_framework_sdk/helpers/agent.md) |
-| `unified_io` ⚠️ 開發中，目前不可用 | [README](src/isd_py_framework_sdk/unified_io/README.md) | [agent.md](src/isd_py_framework_sdk/unified_io/agent.md) |
+| `unified_io` | [README](src/isd_py_framework_sdk/unified_io/README.md) | [agent.md](src/isd_py_framework_sdk/unified_io/agent.md) |
+| `excel_painter` | [README](src/isd_py_framework_sdk/excel_painter/README.md) | [agent.md](src/isd_py_framework_sdk/excel_painter/agent.md) |
+| `credential_vault` | [README](src/isd_py_framework_sdk/credential_vault/README.md) | [agent.md](src/isd_py_framework_sdk/credential_vault/agent.md) |
 | `window_design_helper` | [README](src/isd_py_framework_sdk/window_design_helper/README.md) | [agent.md](src/isd_py_framework_sdk/window_design_helper/agent.md) |
 
 整體架構導覽（給 Claude Code / 貢獻者）見根目錄 [CLAUDE.md](CLAUDE.md)。

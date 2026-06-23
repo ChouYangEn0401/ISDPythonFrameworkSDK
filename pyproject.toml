@@ -81,7 +81,19 @@ excel_painter = [
     "wcwidth>=0.2",
 ]
 
-# All-including convenience (dev + file_compare + message_logger + unified_io + excel_painter)
+# Credential / config loader — core (.env support; JSON + os.environ need no extras)
+credential_vault = [
+    "python-dotenv>=1.0",
+]
+
+# credential_vault — YAML config source
+"credential_vault.yaml" = [
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+]
+
+# All-including convenience (dev + file_compare + message_logger + unified_io + excel_painter
+# + credential_vault)
 all = [
     "pytest>=7.0",
     "black>=24.0",
@@ -91,6 +103,7 @@ all = [
     "colorama>=0.4.6",
     "sqlalchemy>=2.0",
     "wcwidth>=0.2",
+    "python-dotenv>=1.0",
 ]
 
 [project.scripts]
