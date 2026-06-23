@@ -90,6 +90,7 @@ src/isd_py_framework_sdk/
 ├── path_manager/                 集中式路徑管理（singleton registry）
 ├── unified_io/                   統一 IO 介面（IReader/IWriter adapter）
 ├── excel_painter/                Excel 樣式工具（fluent ExcelPainter + 格式快照）
+├── cipher_kit/                   加密工具（seal/unseal + 可組合 cipher / KDF / 金鑰來源）
 ├── credential_vault/             祕密載入（env/yaml/json/SYS_ENV + 透明解密）
 ├── helpers/
 │   ├── assertions/               型別、值域、集合斷言
@@ -134,13 +135,16 @@ src/isd_py_framework_sdk/
 [unified_io.excel]    → pandas, openpyxl
 [unified_io.sql]      → pandas, sqlalchemy
 [excel_painter]       → openpyxl, wcwidth
+[cipher_kit]          → cryptography
+[cipher_kit.argon2]   → cryptography, argon2-cffi
+[cipher_kit.keyring]  → cryptography, keyring
 [credential_vault]    → python-dotenv
 [credential_vault.yaml] → python-dotenv, pyyaml
 [dev]                 → pytest, black
 [all]                 → 全部
 ```
 
-`file_compare/__init__.py` 使用 lazy import 延遲載入，確保不需要的 backend 不會在 import 時就失敗。`credential_vault` 同樣採延遲載入：讀純文字值時完全不碰加密依賴，只有真的要解 `CK1` token 才 lazy import `cipher_kit`。
+`file_compare/__init__.py` 使用 lazy import 延遲載入，確保不需要的 backend 不會在 import 時就失敗。`cipher_kit` 與 `credential_vault` 同樣採延遲載入：`import cipher_kit` 本身不需要 `cryptography`，重依賴只在實際 `seal`/`unseal` 時才載入；`credential_vault` 讀純文字值時完全不碰 `cryptography`，只有真的要解 `CK1` token 才 lazy import `cipher_kit`。
 
 ### 環境變數控制
 | 變數 | 作用 |
@@ -168,6 +172,7 @@ src/isd_py_framework_sdk/
 | `helpers.exceptions` | 10 個面向的例外 | `isd_py_framework_sdk.exceptions` |
 | `unified_io` | `IReader`, `IWriter`, `CsvIOAdapter`, `ExcelIOAdapter`, `JsonIOAdapter`, `SqlIOAdapter` | `isd_py_framework_sdk.unified_io` |
 | `excel_painter` | `ExcelPainter`, `save_styled_table`, `TableStyle`, `SheetFormatSnapshot`, `STATUS_*` | `isd_py_framework_sdk.excel_painter` |
+| `cipher_kit` | `seal`, `unseal`, `CipherKit`, `PasswordCipher`, `RsaHybridCipher`, `LayeredCipher`, `OsKeyring`, `generate_rsa_keypair` | `isd_py_framework_sdk.cipher_kit` |
 | `credential_vault` | `CredentialVault`, `load_secret`, `OsEnvSource`, `DotEnvSource`, `YamlSource`, `JsonSource` | `isd_py_framework_sdk.credential_vault` |
 
 ---
@@ -179,4 +184,5 @@ src/isd_py_framework_sdk/
 - `message_logger` 的 Tkinter adapter 只能在主執行緒使用 widget；跨執行緒 logging 需搭配 `widget.after()` + `queue.Queue`。
 - `unified_io/.env` 不應版控（`.gitignore` 以 `**/.env` 排除；該檔含真實 MSSQL 憑證，切勿提交）。
 - `excel_painter` 的 `mode="preserve"`（經由 `unified_io`）與 `SheetFormatSnapshot` 不保留 `CellRichText`／charts／images／conditional-formatting，只還原 cell style。
-- `credential_vault`：把 sealed token 與其 passphrase 放在同一個檔案（如同一份 `.env`）等於沒加密——務必從**不同來源**取得金鑰。透明解密需另裝 `cipher_kit`（lazy import，讀純文字值時不會載入）。
+- `cipher_kit`：把 sealed token 與其 passphrase 放在同一個檔案（如同一份 `.env`）等於沒加密——務必用 `KeySource`（`OsKeyring` / `EnvSecret` / `PromptSecret`）從**不同來源**取得金鑰。金鑰遺失即資料遺失，無後門。`LayeredCipher` 的 token 不能用模組級 `unseal()` 自動解，需用相同 recipe 重建。
+- `cipher_kit` token 為自描述格式 `CK1.<header>.<body>`；同一明文每次 `seal` 因隨機 salt/nonce 而不同，勿用 token 字串做相等比較或快取鍵。`argon2id` 需 `[cipher_kit.argon2]`，未安裝時預設 KDF 自動降級為 `scrypt`（顯式指定缺套件則拋 `MissingDependencyError`）。
