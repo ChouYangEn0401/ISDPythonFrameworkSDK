@@ -27,8 +27,11 @@ from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
-from colorama import Fore, Style
-
+# colorama is imported lazily inside the terminal adapters (see
+# AbstractTerminalAdapterBase.__init__) so that importing this module — and the
+# whole SDK — never requires colorama. It is only needed when a coloured
+# terminal adapter is actually constructed.
+from .._optional import require
 from .base.LoggerAdapterBase import LoggerAdapterBase
 from .base.levels import LogLevelLiteral
 
@@ -55,47 +58,87 @@ __all__ = [
 class AbstractTerminalAdapterBase(LoggerAdapterBase, ABC):
     """
     彩色 terminal 輸出的抽象基底。
-    子類透過類別屬性 ``_level_colors`` 提供每個 level 的 colorama 色碼。
-    ``shine=True`` 時額外疊加 Style.BRIGHT。
+
+    子類透過類別屬性 ``_level_colors`` 提供每個 level 的顏色。值為 colorama
+    的屬性「名稱」字串（例如 ``"BLUE"``、``"LIGHTYELLOW_EX+BRIGHT"``），於
+    adapter **建構時** 才 lazy import colorama 並解析成實際色碼——因此 import
+    本模組（與整個 SDK）完全不需要 colorama，只有真正建立彩色 terminal adapter
+    時才需要。未安裝 colorama 時會在此拋出帶安裝指示的
+    ``MissingOptionalDependencyError``。
+
+    向下相容：若子類直接放入已解析的 colorama 色碼（含 ANSI escape 的字串），
+    解析器會原樣保留。``shine=True`` 時額外疊加 ``Style.BRIGHT``。
     """
 
+    # colorama 屬性名稱（lazy 解析）；以 ``+`` 串接多個（Fore/Style 皆可）。
     _level_colors: dict[str, str] = {}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # required-but-deferred: colorama 只有用到彩色 terminal adapter 才需要。
+        self._colorama = require(
+            "colorama", extra="message_logger", feature="coloured terminal logging"
+        )
+        self._colorama.init()  # idempotent；Windows 上啟用 ANSI 轉譯
+        self._resolved_colors: dict[str, str] = {
+            level: self._resolve(self._colorama, spec)
+            for level, spec in self._level_colors.items()
+        }
+
+    @staticmethod
+    def _resolve(colorama, spec: str) -> str:
+        """把 ``"LIGHTYELLOW_EX+BRIGHT"`` 之類的名稱解析成實際色碼。
+
+        已是 ANSI escape 的字串（含 ``\\x1b``，來自舊式自訂子類）原樣保留。
+        """
+        out = ""
+        for token in str(spec).split("+"):
+            token = token.strip()
+            if not token:
+                continue
+            if "\x1b" in token:  # 已解析過的色碼（向下相容）
+                out += token
+            elif hasattr(colorama.Fore, token):
+                out += getattr(colorama.Fore, token)
+            elif hasattr(colorama.Style, token):
+                out += getattr(colorama.Style, token)
+        return out
 
     def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
         level = self.normalize_level(level)
         if not self.should_emit(level):
             return
-        color = self._level_colors.get(level, "")
+        color = self._resolved_colors.get(level, "")
         if shine:
-            color = color + Style.BRIGHT
-        print(f"{color}{formatted}{Style.RESET_ALL}")
+            color = color + self._colorama.Style.BRIGHT
+        print(f"{color}{formatted}{self._colorama.Style.RESET_ALL}")
 
 
 class DarkThemeTerminalAdapter(AbstractTerminalAdapterBase):
     """適合深色 / 黑色終端背景的彩色 console adapter。"""
     _level_colors = {
-        "DEBUG":      Fore.BLUE,
-        "INFO":       Fore.WHITE,
-        "CHECKPOINT": Fore.LIGHTCYAN_EX,
-        "SUCCESS":    Fore.LIGHTGREEN_EX,
-        "WARNING":    Fore.YELLOW,
-        "ERROR":      Fore.RED,
-        "CRITICAL":   Fore.MAGENTA,
-        "HIGHLIGHT":  Fore.LIGHTYELLOW_EX + Style.BRIGHT,
+        "DEBUG":      "BLUE",
+        "INFO":       "WHITE",
+        "CHECKPOINT": "LIGHTCYAN_EX",
+        "SUCCESS":    "LIGHTGREEN_EX",
+        "WARNING":    "YELLOW",
+        "ERROR":      "RED",
+        "CRITICAL":   "MAGENTA",
+        "HIGHLIGHT":  "LIGHTYELLOW_EX+BRIGHT",
     }
 
 
 class LightThemeTerminalAdapter(AbstractTerminalAdapterBase):
     """適合淺色 / 白色終端背景的彩色 console adapter。"""
     _level_colors = {
-        "DEBUG":      Fore.BLUE,
-        "INFO":       Fore.BLACK,
-        "CHECKPOINT": Fore.CYAN,
-        "SUCCESS":    Fore.GREEN,
-        "WARNING":    Fore.MAGENTA,
-        "ERROR":      Fore.RED,
-        "CRITICAL":   Fore.MAGENTA,
-        "HIGHLIGHT":  Fore.LIGHTYELLOW_EX + Style.BRIGHT,
+        "DEBUG":      "BLUE",
+        "INFO":       "BLACK",
+        "CHECKPOINT": "CYAN",
+        "SUCCESS":    "GREEN",
+        "WARNING":    "MAGENTA",
+        "ERROR":      "RED",
+        "CRITICAL":   "MAGENTA",
+        "HIGHLIGHT":  "LIGHTYELLOW_EX+BRIGHT",
     }
 
 
@@ -614,7 +657,32 @@ class QueuedSocketAdapter(LoggerAdapterBase):
         except Exception:
             pass
 
-from ..helpers.decorators.lifecycle import test_func  # noqa: E402
+class _StubAdapterWarning(UserWarning):
+    """Issued when an unimplemented stub adapter's broadcast() is called."""
+
+
+def _stub_func(reason: str = ""):
+    """Mark an adapter method as an unimplemented stub; warn on every call.
+
+    Local to message_logger so this package stays self-contained (it no longer
+    imports ``helpers.decorators``). Equivalent in spirit to the public
+    ``decorators.test_func``.
+    """
+    import functools
+    import warnings
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            msg = f"{func.__qualname__!r} is an unimplemented stub."
+            if reason:
+                msg += f" {reason}"
+            warnings.warn(msg, category=_StubAdapterWarning, stacklevel=2)
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 class HTMLAdapter(LoggerAdapterBase):
@@ -623,7 +691,7 @@ class HTMLAdapter(LoggerAdapterBase):
     繼承並覆寫 ``broadcast()`` 以實作自訂 HTML 輸出邏輯。
     """
 
-    @test_func("HTMLAdapter.broadcast() is a no-op stub. Subclass and implement to use.")
+    @_stub_func("HTMLAdapter.broadcast() is a no-op stub. Subclass and implement to use.")
     def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
         pass
 
@@ -634,7 +702,7 @@ class HTTPAdapter(LoggerAdapterBase):
     繼承並覆寫 ``broadcast()`` 以實作 HTTP 送出邏輯（例如 requests.post）。
     """
 
-    @test_func("HTTPAdapter.broadcast() is a no-op stub. Subclass and implement to use.")
+    @_stub_func("HTTPAdapter.broadcast() is a no-op stub. Subclass and implement to use.")
     def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
         pass
 
@@ -645,7 +713,7 @@ class DBAdapter(LoggerAdapterBase):
     繼承並覆寫 ``broadcast()`` 以實作資料庫寫入邏輯。
     """
 
-    @test_func("DBAdapter.broadcast() is a no-op stub. Subclass and implement to use.")
+    @_stub_func("DBAdapter.broadcast() is a no-op stub. Subclass and implement to use.")
     def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
         pass
 
@@ -656,6 +724,6 @@ class WebsocketAdapter(LoggerAdapterBase):
     繼承並覆寫 ``broadcast()`` 以實作 WebSocket 推送邏輯。
     """
 
-    @test_func("WebsocketAdapter.broadcast() is a no-op stub. Subclass and implement to use.")
+    @_stub_func("WebsocketAdapter.broadcast() is a no-op stub. Subclass and implement to use.")
     def broadcast(self, level: str, formatted: str, shine: bool = False) -> None:
         pass

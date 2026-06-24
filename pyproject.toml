@@ -25,105 +25,68 @@ where = ["src"]
 version = { attr = "isd_py_framework_sdk._version.__version__" }
 
 [project.optional-dependencies]
-# Optional extras grouped by real subpackage names. Default install is the
-# core framework only (no optional heavy backends). Users can opt into the
-# extra features they need using extras named after modules.
+# ───────────────────────────────────────────────────────────────────────────
+# Optional extras, named after the subpackage that needs them.
+#
+#   pip install isd-py-framework-sdk                   → core only (zero heavy deps)
+#   pip install isd-py-framework-sdk[message_logger]   → just one feature
+#   pip install isd-py-framework-sdk[unified_io.excel] → a feature + its backend
+#   pip install isd-py-framework-sdk[all]              → everything
+#
+# Design rules:
+#   • Each third-party version pin is declared exactly ONCE, in the leaf extra
+#     that owns it.
+#   • Umbrella extras (and `all`) reference other extras instead of re-listing
+#     pins, so the dependency graph can never drift out of sync.
+#   • Dotted sub-extra names (e.g. `unified_io.excel`) are kept verbatim for
+#     backward compatibility with already-published install commands.
+# ───────────────────────────────────────────────────────────────────────────
 
 # Development helpers (tests, formatting)
-dev = [
-    "pytest>=7.0",
-    "black>=24.0",
-]
+dev = ["pytest>=7.0", "black>=24.0"]
 
-# Terminal/color support for the message logger
-message_logger = [
-    "colorama>=0.4.6",
-]
+# message_logger — coloured terminal output (other adapters need no extras)
+message_logger = ["colorama>=0.4.6"]
 
-# Excel backend for file_compare (openpyxl + pandas)
-"file_compare.excel" = [
-    "openpyxl>=3.1",
-    "pandas>=2.0",
-]
+# excel_painter — fluent Excel styling.
+# openpyxl is required; wcwidth sharpens CJK auto-width (a built-in fallback is
+# used when it is absent, so the feature still works without it).
+excel_painter = ["openpyxl>=3.1", "wcwidth>=0.2"]
 
-# YAML backend for file_compare
-"file_compare.yaml" = [
-    "pyyaml>=6.0",
-]
+# file_compare — one extra per backend, plus a convenience union of both.
+"file_compare.excel" = ["openpyxl>=3.1", "pandas>=2.0"]
+"file_compare.yaml"  = ["pyyaml>=6.0"]
+file_compare = ["isd-py-framework-sdk[file_compare.excel,file_compare.yaml]"]
 
-# Convenience: all file_compare backends
-file_compare = [
-    "openpyxl>=3.1",
-    "pandas>=2.0",
-    "pyyaml>=6.0",
-]
+# unified_io — core does CSV / JSON through pandas; the Excel path bridges to
+# excel_painter (styled / preserve writes), so its extra pulls excel_painter in.
+unified_io = ["pandas>=2.0"]
+"unified_io.excel" = ["isd-py-framework-sdk[unified_io,excel_painter]"]
+"unified_io.sql"   = ["isd-py-framework-sdk[unified_io]", "sqlalchemy>=2.0"]
 
-# Unified IO — core (CSV / JSON, no heavy backends)
-unified_io = [
-    "pandas>=2.0",
-]
+# cipher_kit — core AEAD / KDF / RSA via cryptography; optional memory-hard KDF
+# (argon2) and OS secure-store key source (keyring) backends.
+cipher_kit = ["cryptography>=42"]
+"cipher_kit.argon2"  = ["isd-py-framework-sdk[cipher_kit]", "argon2-cffi>=23"]
+"cipher_kit.keyring" = ["isd-py-framework-sdk[cipher_kit]", "keyring>=24"]
 
-# Unified IO — Excel backend
-"unified_io.excel" = [
-    "pandas>=2.0",
-    "openpyxl>=3.1",
-]
+# credential_vault — core .env loading (JSON + os.environ need no extras);
+# optional YAML config source.
+credential_vault = ["python-dotenv>=1.0"]
+"credential_vault.yaml" = ["isd-py-framework-sdk[credential_vault]", "pyyaml>=6.0"]
 
-# Unified IO — SQL backend
-"unified_io.sql" = [
-    "pandas>=2.0",
-    "sqlalchemy>=2.0",
-]
-
-# Excel visual-formatting module
-excel_painter = [
-    "openpyxl>=3.1",
-    "wcwidth>=0.2",
-]
-
-# Encryption toolkit — core (AES-256-GCM / ChaCha20-Poly1305 / scrypt / PBKDF2 / RSA)
-cipher_kit = [
-    "cryptography>=42",
-]
-
-# cipher_kit — Argon2id KDF backend (memory-hard, recommended)
-"cipher_kit.argon2" = [
-    "cryptography>=42",
-    "argon2-cffi>=23",
-]
-
-# cipher_kit — OS secure-store key source (Windows Credential Manager / Keychain / Secret Service)
-"cipher_kit.keyring" = [
-    "cryptography>=42",
-    "keyring>=24",
-]
-
-# Credential / config loader — core (.env support; JSON + os.environ need no extras)
-credential_vault = [
-    "python-dotenv>=1.0",
-]
-
-# credential_vault — YAML config source
-"credential_vault.yaml" = [
-    "python-dotenv>=1.0",
-    "pyyaml>=6.0",
-]
-
-# All-including convenience (dev + file_compare + message_logger + unified_io + excel_painter
-# + cipher_kit + credential_vault)
+# Everything: every runtime feature + dev tools, composed from the extras above
+# so `all` is always a complete superset with no duplicated pins.
 all = [
-    "pytest>=7.0",
-    "black>=24.0",
-    "openpyxl>=3.1",
-    "pandas>=2.0",
-    "pyyaml>=6.0",
-    "colorama>=0.4.6",
-    "sqlalchemy>=2.0",
-    "wcwidth>=0.2",
-    "cryptography>=42",
-    "argon2-cffi>=23",
-    "keyring>=24",
-    "python-dotenv>=1.0",
+    "isd-py-framework-sdk[dev]",
+    "isd-py-framework-sdk[message_logger]",
+    "isd-py-framework-sdk[excel_painter]",
+    "isd-py-framework-sdk[file_compare]",
+    "isd-py-framework-sdk[unified_io.excel]",
+    "isd-py-framework-sdk[unified_io.sql]",
+    "isd-py-framework-sdk[cipher_kit.argon2]",
+    "isd-py-framework-sdk[cipher_kit.keyring]",
+    "isd-py-framework-sdk[credential_vault.yaml]",
 ]
 
 [project.scripts]

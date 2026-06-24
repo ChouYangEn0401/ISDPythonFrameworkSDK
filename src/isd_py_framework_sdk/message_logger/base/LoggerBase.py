@@ -2,9 +2,11 @@ import os
 from datetime import datetime
 from typing import List
 
-from colorama import init as colorama_init
-colorama_init()
-
+# NOTE: colorama is intentionally NOT imported here. LoggerBase only formats
+# strings; ANSI colouring (and colorama.init()) lives in the terminal adapters,
+# which import colorama lazily. This keeps `import isd_py_framework_sdk` working
+# with zero heavy dependencies — colorama is only needed when a coloured
+# terminal adapter is actually constructed.
 from .LoggerAdapterBase import LoggerAdapterBase
 from .levels import LogLevelLiteral, LevelOrder
 

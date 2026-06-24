@@ -177,7 +177,8 @@ from isd_py_framework_sdk.msg_logger import SingletonSystemLogger, DarkThemeTerm
 
 ## 常見陷阱
 
-- `colorama` 是 optional dependency（`[message_logger]` extras）；`adapters.py` 頂層直接 `from colorama import ...`，如未安裝會在 import 時 `ImportError`。
+- `colorama` 是 optional dependency（`[message_logger]` extras），且為 **required-but-deferred**：import 本套件（甚至整個 SDK）完全不需要 colorama，只有在**建構彩色 terminal adapter**（`DarkThemeTerminalAdapter` / `LightThemeTerminalAdapter`）時才會 lazy import；未安裝時於該處拋出帶安裝指示的 `MissingOptionalDependencyError`（`ImportError` 子類）。`FileAdapter`、Tkinter、HTTP/socket adapter 皆不需要 colorama。彩色 adapter 以顏色「名稱」（如 `"BLUE"`、`"LIGHTYELLOW_EX+BRIGHT"`）設定 `_level_colors`，於建構時才解析成色碼（見 `AbstractTerminalAdapterBase`）。
+- 本套件已自我封閉（self-contained）：不再 import `helpers.decorators`；未實作的 stub adapter 改用模組內部的 `_stub_func` 裝飾器。
 - Tkinter adapter 只能從主執行緒呼叫 widget 方法（Tkinter 的限制），跨執行緒需用 `widget.after()` + `queue.Queue` 中轉。
 - `RUN_MODE` 環境變數在模組載入時讀取一次；無法在 runtime 動態改變全域過濾。
 - `SingletonSystemLogger` 是單例；`clear_adapters()` 清空後，同一進程其他地方若保有對 logger 的引用，log 就會無聲無息地消失。

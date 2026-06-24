@@ -33,11 +33,26 @@ Explicit adapters (for constructor-level options)::
 Interfaces (for your own adapters)::
 
     from isd_py_framework_sdk.unified_io import IReader, IWriter, IIOAdapter
+
+DataFrame transform helpers (multi-column sort, select/reorder/rename, dict→df)::
+
+    from isd_py_framework_sdk.unified_io import (
+        multiple_sort_dataframe,
+        sort_dataframe,
+        pick_and_reorder_then_rename_columns,
+        dict_to_df,
+    )
 """
 
 from .adapters._interface import IIOAdapter, IReader, IWriter
 from .adapters import CsvIOAdapter, ExcelIOAdapter, JsonIOAdapter, SqlIOAdapter
 from .data_io import DataIO
+from .df_tools import (
+    multiple_sort_dataframe,
+    sort_dataframe,
+    pick_and_reorder_then_rename_columns,
+    dict_to_df,
+)
 
 __all__ = [
     # Interfaces
@@ -51,4 +66,9 @@ __all__ = [
     "SqlIOAdapter",
     # Façade
     "DataIO",
+    # DataFrame transform helpers
+    "multiple_sort_dataframe",
+    "sort_dataframe",
+    "pick_and_reorder_then_rename_columns",
+    "dict_to_df",
 ]

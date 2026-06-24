@@ -11,7 +11,7 @@
 |---|---|
 | pip 安裝名 | `isd-py-framework-sdk` |
 | Python import 名 | `isd_py_framework_sdk` |
-| 版本 | `0.6.3` |
+| 版本 | `0.7.0` |
 | Python 需求 | `>= 3.11` |
 
 ---
@@ -29,7 +29,32 @@ pip install -e .
 pip install isd-py-framework-sdk[all]
 ```
 
-本套件以 `isd_py_framework_sdk` 為核心框架；預設安裝只包含核心邏輯，不含 `pandas`、`openpyxl`、`pyyaml`、`colorama` 等 heavy 第三方依賴。各子模組依需要安裝對應 extras（例如 `message_logger`、`file_compare.excel`、`file_compare.yaml`、`unified_io.sql`），完整 extras 清單與安裝範例請見各模組自己的 README（連結見下方「模組文件」）。
+本套件以 `isd_py_framework_sdk` 為核心框架；預設安裝**只包含核心邏輯，不含任何 heavy 第三方依賴**（`pandas`、`openpyxl`、`pyyaml`、`colorama`、`cryptography`…）。`import isd_py_framework_sdk` 採 **lazy 載入**（PEP 562）：本身幾乎不 import 任何東西，各功能與子套件在「第一次存取」時才載入，因此 heavy 後端只有在你真的用到對應功能時才會被拉進來。各子模組依需要安裝對應 extras 即可。
+
+### Extras 一覽（裝你需要的就好）
+
+| Extra | 啟用功能 | 帶入的第三方依賴 |
+|---|---|---|
+| *(無 extra)* | `base` / `events` / `helpers`（assertions、decorators、exceptions）/ `path_manager` / `monitoring` | 無（純標準庫）|
+| `message_logger` | 彩色 terminal, tkinter 日誌輸出 | `colorama` |
+| `excel_painter` | Excel 樣式工具 | `openpyxl`、`wcwidth` |
+| `file_compare.excel` | Excel 檔案比對 | `openpyxl`、`pandas` |
+| `file_compare.yaml` | YAML 檔案比對 | `pyyaml` |
+| `file_compare` | 上述所有比對後端 | `openpyxl`、`pandas`、`pyyaml` |
+| `unified_io` | CSV / JSON 統一 IO | `pandas` |
+| `unified_io.excel` | Excel 讀寫（含樣式，橋接 `excel_painter`）| `pandas`、`openpyxl`、`wcwidth` |
+| `unified_io.sql` | SQL 讀寫 | `pandas`、`sqlalchemy` |
+| `cipher_kit` | 加密 / 解密（AEAD / KDF / RSA）| `cryptography` |
+| `cipher_kit.argon2` | argon2id KDF（建議）| `cryptography`、`argon2-cffi` |
+| `cipher_kit.keyring` | OS 安全儲存金鑰來源 | `cryptography`、`keyring` |
+| `credential_vault` | `.env` / JSON / 環境變數祕密載入 | `python-dotenv` |
+| `credential_vault.yaml` | 加上 YAML 設定來源 | `python-dotenv`、`pyyaml` |
+| `dev` | 測試 / 格式化工具 | `pytest`、`black` |
+| `all` | 以上全部 | 全部 |
+
+每個 extra 的版本下限只宣告一次；umbrella 與 `all` 透過自我引用組合而成，因此 `all` 永遠是完整的超集合、不會與各 extra 漂移。完整使用範例請見各模組自己的 README（連結見下方「模組文件」）。
+
+> 缺少 optional 依賴時不會在 `import` 當下爆掉；而是在你實際用到該功能時，給你一則明確、可照做的安裝提示（例如缺 `colorama` 時建立彩色 adapter 會提示 `pip install isd-py-framework-sdk[message_logger]`）。
 
 ---
 
@@ -77,6 +102,17 @@ isd_py_framework_sdk/
 - `isd_py_framework_sdk.excel_painter` — Excel 樣式工具（`ExcelPainter`, `save_styled_table`）
 - `isd_py_framework_sdk.cipher_kit` — 加密工具（`seal`, `unseal`, `CipherKit`, `OsKeyring`）
 - `isd_py_framework_sdk.credential_vault` — 祕密載入（`CredentialVault`, `load_secret`）
+- `isd_py_framework_sdk.window_design_helper` — Tkinter 視窗開發輔助工具
+
+子套件也可直接以屬性方式 lazy 取用（第一次存取才載入），不必先 `import`：
+
+```python
+import isd_py_framework_sdk as isd
+
+isd.SingletonMetaclass        # 來自 base（首次存取才載入）
+isd.retry                     # 來自 helpers.decorators
+isd.cipher_kit.seal(...)      # cipher_kit 子套件，首次存取才載入
+```
 
 備註：為了向下相容，套件仍提供便捷短檔（例如 `interface.py`, `events_bus.py`, `msg_logger.py` 等），但文件與範例會以真實 module 名稱為主，避免混淆。
 

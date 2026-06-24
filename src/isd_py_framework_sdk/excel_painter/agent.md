@@ -2,7 +2,7 @@
 
 ## 狀態：新建可用（2026-06）
 
-全新乾淨子套件，取代先前作為參考拉進來的 `BetterPyExcelHelper`（已退役）。設計來源：整併 `BetterPyExcelHelper` 與 `NTUAddressRefilligGUI` / `SecondOrgRefillingForGivenAuthor` 兩專案的所有 Excel 上色／排版做法。
+全新乾淨子套件，取代先前作為參考拉進來的 `BetterPyExcelHelper`（**已於 0.7.0 自套件刪除**）。設計來源：整併 `BetterPyExcelHelper` 與 `NTUAddressRefilligGUI` / `SecondOrgRefillingForGivenAuthor` 兩專案的所有 Excel 上色／排版做法。
 
 驗證（src 在 path 上）：
 
@@ -81,4 +81,7 @@ excel_painter/
 
 ## 未整併（刻意排除）
 
-`BetterPyExcelHelper` 的純 DataFrame 工具（`multiple_sort_dataframe`、`pick_and_reorder_then_rename_columns`、`dict_to_df`、`get_value_from_cell`、欄字母↔數字）**不屬於 painter 範圍**，未移植。欄字母↔數字 openpyxl 已內建（`get_column_letter` / `column_index_from_string`）。其餘 df 工具若仍需要，應另開 df-helpers 模組或併入 `unified_io`。
+`BetterPyExcelHelper` 的純 DataFrame 工具**不屬於 painter 範圍**，未移進 `excel_painter`。0.7.0 刪除 `BetterPyExcelHelper` 時的處置：
+
+- 真正有用的 4 個 df 轉換（`multiple_sort_dataframe`、`sort_dataframe`、`pick_and_reorder_then_rename_columns`、`dict_to_df`）已遷入 `unified_io/df_tools.py`，由 `isd_py_framework_sdk.unified_io` 匯出。
+- `get_value_from_cell`（openpyxl 儲存格讀取輔助）與欄字母↔數字轉換**未保留**：前者屬讀取議題、後者 openpyxl 已內建（`get_column_letter` / `column_index_from_string`）。需要時請直接用 openpyxl。

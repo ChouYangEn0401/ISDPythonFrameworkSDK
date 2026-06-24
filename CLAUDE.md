@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 專案概覽
 
-**ISD Python Framework SDK** (`isd-py-framework-sdk`) 是一套底層基礎框架套件，提供所有 ISD 系列模組共用的設計模式與工具。版本 `0.6.3`，Python ≥ 3.11。
+**ISD Python Framework SDK** (`isd-py-framework-sdk`) 是一套底層基礎框架套件，提供所有 ISD 系列模組共用的設計模式與工具。版本 `0.7.0`，Python ≥ 3.11。
 
 - pip 安裝名：`isd-py-framework-sdk`
 - Python import 名：`isd_py_framework_sdk`
@@ -79,7 +79,8 @@ pip install -e ".[all]"
 ```
 src/isd_py_framework_sdk/
 ├── _version.py                   版本號（動態 setuptools 來源）
-├── __init__.py                   全部公開 API 的 flat 匯出點
+├── _optional.py                  optional 依賴管線（require / have / notify_substitution）
+├── __init__.py                   全部公開 API 的 flat 匯出點（PEP 562 lazy 載入）
 ├── cli.py                        CLI 入口（isd-py-framework-sdk -V）
 │
 ├── base/                         核心設計模式
@@ -122,10 +123,29 @@ src/isd_py_framework_sdk/
 `SingletonMetaclass`（`base/Singleton.py`）是所有 Singleton 的基石。只要 `metaclass=SingletonMetaclass`，類別首次建立後自動呼叫 `_initialize_manager()`（若存在），之後重複 `__call__` 回傳同一實例。`SingletonSystemLogger` 與 `SingletonPathManager` 均以此實作。
 
 ### Adapter/Fan-out 架構（message_logger）
-`LoggerBase`（`message_logger/base/LoggerBase.py`）負責格式化與廣播；各 `LoggerAdapterBase` 子類持有各自的 `level_filter`，自行決定是否輸出。logger 對 adapter 種類完全不知情。
+`LoggerBase`（`message_logger/base/LoggerBase.py`）負責格式化與廣播；各 `LoggerAdapterBase` 子類持有各自的 `level_filter`，自行決定是否輸出。logger 對 adapter 種類完全不知情。`message_logger` 為 self-contained（不 import 其他 feature 子套件，只依賴 `base` 與核心 `_optional`）。
+
+### 頂層 lazy 載入（PEP 562）
+`__init__.py` 不在 import 時 eager 拉入任何子套件——它只定義 `_FLAT_EXPORTS`（名稱 → 來源模組）與 `__getattr__`/`__dir__`，於「第一次存取」某個名稱時才 import 其來源模組並快取。因此：
+
+- `import isd_py_framework_sdk` 幾乎零成本，且**永遠不需要任何 optional 依賴**；
+- flat API（`from isd_py_framework_sdk import retry`）與子套件屬性（`isd.cipher_kit`）皆照舊可用；
+- `from ... import *` 走 `__all__`，不會把 heavy 子套件拉進來；
+- 子套件 / 短路徑別名（`interface`、`events_bus`…）也可 lazy 以屬性取用。
+
+新增公開名稱時：加到對應模組底下的 `_FLAT_EXPORTS`，並（為了 IDE 自動完成）加到檔案末端的 `TYPE_CHECKING` 區塊。
+
+### Optional 依賴與通知（`_optional.py`）
+核心承諾「預設安裝零 heavy 依賴」。所有 heavy 後端都**延後載入**，並透過 `_optional` 提供一致的使用者體驗：
+
+- `require(module, *, extra=, feature=)` — lazy import，缺套件時拋 `MissingOptionalDependencyError`（`ImportError` 子類），訊息直接給出 `pip install isd-py-framework-sdk[<extra>]`。
+- `have(module)` — capability 探測（如 `cipher_kit.have_argon2()`）。
+- `notify_substitution(msg, once=True)` — 後端被「替換」時（如 argon2id → scrypt）發一次性 `DependencySubstitutionWarning`（numpy/pandas 風格）。
+
+API 演進（改名 / 移除 / 實驗性）的對外通知，沿用 `helpers/decorators/lifecycle.py` 既有裝飾器：`deprecated` / `removed_in` / `since` / `experimental` / `battered`。這是「我們換掉了什麼」的官方通知機制，不要另造一套。
 
 ### Extras 分層依賴策略
-預設安裝（`pip install isd-py-framework-sdk`）不包含任何 heavy 第三方依賴（`pandas`, `openpyxl`, `pyyaml`, `colorama`…）。使用者依需要安裝對應 extras：
+預設安裝（`pip install isd-py-framework-sdk`）不包含任何 heavy 第三方依賴（`pandas`, `openpyxl`, `pyyaml`, `colorama`…）。每個版本下限只宣告一次（在擁有該依賴的 leaf extra），umbrella 與 `all` 以**自我引用**（`isd-py-framework-sdk[...]`）組合，確保 `all` 永遠是完整超集合、不會漂移。使用者依需要安裝對應 extras：
 
 ```
 [message_logger]      → colorama
@@ -145,6 +165,8 @@ src/isd_py_framework_sdk/
 ```
 
 `file_compare/__init__.py` 使用 lazy import 延遲載入，確保不需要的 backend 不會在 import 時就失敗。`cipher_kit` 與 `credential_vault` 同樣採延遲載入：`import cipher_kit` 本身不需要 `cryptography`，重依賴只在實際 `seal`/`unseal` 時才載入；`credential_vault` 讀純文字值時完全不碰 `cryptography`，只有真的要解 `CK1` token 才 lazy import `cipher_kit`。
+
+`message_logger` 的 `colorama` 為 **required-but-deferred**：`adapters.py` / `LoggerBase.py` 頂層不再 import colorama，只有在建構彩色 terminal adapter 時才 lazy import（缺套件時拋 `MissingOptionalDependencyError`）。`unified_io` 的 Excel 路徑（styled / `preserve` 寫入）會橋接到 `excel_painter`，因此 `[unified_io.excel]` extra 透過自我引用一併帶入 `excel_painter`（openpyxl + wcwidth）。
 
 ### 環境變數控制
 | 變數 | 作用 |
@@ -170,7 +192,7 @@ src/isd_py_framework_sdk/
 | `helpers.assertions` | `assert__is_*` 系列 | `isd_py_framework_sdk.assertions` |
 | `helpers.decorators` | 10 個面向的裝飾器 | `isd_py_framework_sdk.decorators` |
 | `helpers.exceptions` | 10 個面向的例外 | `isd_py_framework_sdk.exceptions` |
-| `unified_io` | `IReader`, `IWriter`, `CsvIOAdapter`, `ExcelIOAdapter`, `JsonIOAdapter`, `SqlIOAdapter` | `isd_py_framework_sdk.unified_io` |
+| `unified_io` | `DataIO`, `IReader`, `IWriter`, `CsvIOAdapter`, `ExcelIOAdapter`, `JsonIOAdapter`, `SqlIOAdapter`；df 工具：`multiple_sort_dataframe`, `sort_dataframe`, `pick_and_reorder_then_rename_columns`, `dict_to_df` | `isd_py_framework_sdk.unified_io` |
 | `excel_painter` | `ExcelPainter`, `save_styled_table`, `TableStyle`, `SheetFormatSnapshot`, `STATUS_*` | `isd_py_framework_sdk.excel_painter` |
 | `cipher_kit` | `seal`, `unseal`, `CipherKit`, `PasswordCipher`, `RsaHybridCipher`, `LayeredCipher`, `OsKeyring`, `generate_rsa_keypair` | `isd_py_framework_sdk.cipher_kit` |
 | `credential_vault` | `CredentialVault`, `load_secret`, `OsEnvSource`, `DotEnvSource`, `YamlSource`, `JsonSource` | `isd_py_framework_sdk.credential_vault` |
@@ -185,4 +207,4 @@ src/isd_py_framework_sdk/
 - `unified_io/.env` 不應版控（`.gitignore` 以 `**/.env` 排除；該檔含真實 MSSQL 憑證，切勿提交）。
 - `excel_painter` 的 `mode="preserve"`（經由 `unified_io`）與 `SheetFormatSnapshot` 不保留 `CellRichText`／charts／images／conditional-formatting，只還原 cell style。
 - `cipher_kit`：把 sealed token 與其 passphrase 放在同一個檔案（如同一份 `.env`）等於沒加密——務必用 `KeySource`（`OsKeyring` / `EnvSecret` / `PromptSecret`）從**不同來源**取得金鑰。金鑰遺失即資料遺失，無後門。`LayeredCipher` 的 token 不能用模組級 `unseal()` 自動解，需用相同 recipe 重建。
-- `cipher_kit` token 為自描述格式 `CK1.<header>.<body>`；同一明文每次 `seal` 因隨機 salt/nonce 而不同，勿用 token 字串做相等比較或快取鍵。`argon2id` 需 `[cipher_kit.argon2]`，未安裝時預設 KDF 自動降級為 `scrypt`（顯式指定缺套件則拋 `MissingDependencyError`）。
+- `cipher_kit` token 為自描述格式 `CK1.<header>.<body>`；同一明文每次 `seal` 因隨機 salt/nonce 而不同，勿用 token 字串做相等比較或快取鍵。`argon2id` 需 `[cipher_kit.argon2]`，未安裝時預設 KDF 自動降級為 `scrypt`，並發一次性 `DependencySubstitutionWarning` 通知（顯式指定 `argon2id` 但缺套件則拋 cipher_kit 自有的 `MissingDependencyError`）。注意此處有兩個相似但不同的錯誤：`cipher_kit.errors.MissingDependencyError`（`CipherKitError` 子類，cipher_kit 內部用）與核心 `_optional.MissingOptionalDependencyError`（`ImportError` 子類，跨模組共用，如 message_logger 缺 colorama）。

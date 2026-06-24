@@ -35,6 +35,22 @@ df = adapter.read("report.xlsx", sheet_name="Data")
 adapter.write(df_updated, "report.xlsx", sheet_name="Data")
 ```
 
+## DataFrame 轉換小工具（`df_tools`）
+
+讀寫前後常見的 DataFrame 整形工具（自 0.7.0 起，由已退役的 `BetterPyExcelHelper` 遷入；皆只依賴 `pandas`）：
+
+```python
+from isd_py_framework_sdk.unified_io import (
+    multiple_sort_dataframe,            # 多欄排序，每欄可選 a->z / z->a / 自訂類別順序
+    sort_dataframe,                     # 單欄排序（multiple_sort_dataframe 的薄包裝）
+    pick_and_reorder_then_rename_columns,  # 一步完成挑欄 + 重排序 + 改名
+    dict_to_df,                         # 智慧判斷 dict 形狀轉成 DataFrame
+)
+
+df = sort_dataframe(df, "建立時間", "z->a")
+df = pick_and_reorder_then_rename_columns(df, ["id", "name"], {"name": "姓名"})
+```
+
 ## 具體 Adapter
 
 | Adapter | 讀來源 | 寫目標 | 需要 extras |

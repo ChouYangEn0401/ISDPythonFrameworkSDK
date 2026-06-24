@@ -57,8 +57,23 @@ def have_argon2() -> bool:
 
 
 def default_kdf() -> str:
-    """Pick the strongest KDF available: argon2id if installed, else scrypt."""
-    return "argon2id" if have_argon2() else "scrypt"
+    """Pick the strongest KDF available: argon2id if installed, else scrypt.
+
+    When argon2 is unavailable we transparently fall back to scrypt (still
+    memory-hard) and emit a one-time, numpy/pandas-style heads-up so the
+    substitution is never silent. Install the recommended backend with
+    ``pip install isd-py-framework-sdk[cipher_kit.argon2]`` to use argon2id.
+    """
+    if have_argon2():
+        return "argon2id"
+    from .._optional import notify_substitution
+    notify_substitution(
+        "cipher_kit: 'argon2-cffi' is not installed; the default key-derivation "
+        "function falls back from argon2id to scrypt. Install "
+        "isd-py-framework-sdk[cipher_kit.argon2] for the recommended memory-hard "
+        "argon2id KDF. (You can also pass kdf='scrypt' explicitly to silence this.)"
+    )
+    return "scrypt"
 
 
 def _normalise(algorithm: str) -> str:
