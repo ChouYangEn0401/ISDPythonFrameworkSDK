@@ -192,11 +192,3 @@ class EnvironmentResolver:
             )
         return Path(venv).resolve()
 
-        """System temporary directory (platform-specific, e.g. ``/tmp`` or ``%TEMP%``)."""
-        return Path(tempfile.gettempdir()).resolve()
-
-    @staticmethod
-    def cwd() -> Path:
-        """Current working directory at the moment of the call."""
-        return Path.cwd().resolve()
-

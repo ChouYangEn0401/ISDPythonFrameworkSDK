@@ -43,7 +43,14 @@ Internal
 """
 
 from ._enums import PathMode
-from ._waterfall import Waterfall, ResolveIntent, WaterfallTrace, Attempt, PRESETS
+from ._waterfall import (
+    Waterfall,
+    WaterfallSpec,
+    ResolveIntent,
+    WaterfallTrace,
+    Attempt,
+    PRESETS,
+)
 from ._resolver import EnvironmentResolver
 from ._conflict import (
     ConflictStrategy,
@@ -62,6 +69,7 @@ __all__ = [
     "IPathManager",
     "PathMode",
     "Waterfall",
+    "WaterfallSpec",
     "PRESETS",
     "ResolveIntent",
     "WaterfallTrace",

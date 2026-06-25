@@ -57,10 +57,15 @@ class ConflictStrategy(ABC):
 
     Implement ``resolve(path) -> Path`` to provide custom behaviour.
     Override ``conflict_info()`` for custom diagnostic messages.
-    """
-    """
-    But I Wonder If A Double Check Is Needed, Because If The Request Is Asked In Identical Same Second,
-    The Suffixing Still May Return A Conflicted Path.
+
+    Concurrency note
+    ----------------
+    ``resolve()`` only computes a path — it does not reserve it. Two
+    concurrent callers resolving the same conflict (e.g. two threads/
+    processes writing in the same second) can both receive the same
+    "safe" candidate before either has written to it (TOCTOU). Callers
+    needing hard uniqueness guarantees must still create/lock the file
+    themselves immediately after calling ``resolve()``.
     """
 
     @abstractmethod

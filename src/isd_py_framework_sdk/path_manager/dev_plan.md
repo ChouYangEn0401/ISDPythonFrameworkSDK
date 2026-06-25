@@ -144,17 +144,25 @@ pm = SingletonPathManager()
 pm.set_proj_root(__file__, levels_up=2)  # 從本檔往上 2 層
 pm.set_app_name("MyApp")                 # 影響 USER_* 目錄名稱
 
-# 路徑登記（附說明）
-pm.register("data_in",    "data/inputs",      description="原始資料目錄")
-pm.register("data_out",   "data/outputs",     description="輸出結果目錄")
-pm.register("error_log",  "logs/error.log",   description="執行期錯誤日誌")
-pm.register("bundled_db", "assets/ref.db",    anchor=PathMode.EXE_INNER,
-                                               description="打包內嵌資料庫")
+# 路徑登記（附說明）— 共用 anchor 的一次登記多個，不必每行重複 PathMode
+pm.register_many(
+    {
+        "data_in":   "data/inputs",
+        "data_out":  "data/outputs",
+        "error_log": "logs/error.log",
+    },
+    anchor=PathMode.PROJ_ABSOLUTE,
+    descriptions={"data_in": "原始資料目錄"},
+)
+# anchor 不同的個別登記照舊
+pm.register("bundled_db", "assets/ref.db", PathMode.EXE_INNER, description="打包內嵌資料庫")
 
 # 取得路徑
 pm.get("data_in")                                   # 絕對路徑
-pm.get("data_in", PathMode.PROJ_RELATIVE)           # 相對路徑
-pm.get("config",  Waterfall.UNIVERSAL)              # waterfall READ
+pm["data_in"]                                        # 同上，dict 風格
+"data_in" in pm                                      # 成員測試（= has）
+pm.get("config",  Waterfall.UNIVERSAL)              # waterfall（preset）
+pm.get("config",  [PathMode.PROJ_ABSOLUTE, PathMode.CWD])  # waterfall（清單，免建構）
 pm.get("report",  Waterfall.ETL_OUTPUT,             # waterfall WRITE
        intent=ResolveIntent.WRITE)
 
@@ -193,6 +201,43 @@ print(trace)   # 每個 waterfall 步驟的 ✓/✗ 詳情
 | `README.md` | ✅ |
 
 ---
+
+## 強化紀錄（enterprise-grade hardening pass）
+
+> 2026-06-25 — 針對「作為公開 API 被外部專案使用」做的健檢與修正。
+
+審查 `_resolver.py` / `_conflict.py` / `interface.py` / `singleton_path_manager.py` 後修正：
+
+- `_resolver.py`：移除 `virtual_env()` 內一段重構遺留的死碼（return 後方無法觸及的
+  docstring + return），以及因此產生的重複 `cwd()` 定義（會悄悄遮蔽前面的正式版本）。
+- `_conflict.py`：`ConflictStrategy` class body 裡一段散落的字串文字（TOCTOU 疑慮筆記）
+  併入正式 docstring 的 *Concurrency note*，不再是無用的浮空字串常數。
+- `interface.py`：移除重複的 `# Conflict resolution` 區塊註解標頭。
+- `singleton_path_manager.py`：docstring 宣稱「thread-safe singleton」，但
+  `unregister()` / `set_proj_root()` / `set_app_name()` / `set_default_conflict_strategy()`
+  先前未持有 `self._lock` 即修改共享狀態，與 `register()` / `remap_anchor()` 等方法的鎖定
+  風格不一致。已補上鎖，使所有 mutator 一致受 `self._lock` 保護。
+
+修正後 `tests/path/test_path_manager.py` 117 tests / 9 subtests 全綠。
+
+### 易用性提升（reduce recognition loading — 2026-06-25）
+
+目標：作為公開 API，降低使用者的「認知負擔」，讓「集中設定所有資源/IO 目錄」這件事
+更乾淨好用，同時 waterfall 維持運作但更簡單。新增（全部 additive，不破壞既有 API）：
+
+- **`register_many(paths, anchor, *, descriptions=None)`** — 一次登記共用同一 anchor 的多個 tag，
+  不必每行重複 `PathMode.XXX`。預設實作放在 `IPathManager`（以 `register()` 表達，子類免費繼承）；
+  `SingletonPathManager` 覆寫為「單次鎖定的原子批次」，先建好所有 `PathEntry` 再插入，
+  途中若有壞路徑則完全不登記（無半套狀態）。`descriptions` 含未知 tag 會丟 `KeyError` 以早期抓錯字。
+- **Mapping 風格語法糖** — `pm["tag"]`（= `get`）、`"tag" in pm`（= `has`）、`len(pm)`、`iter(pm)`。
+  不引入新概念，只是讓物件用起來像 dict，省去記方法名。
+- **Waterfall 簡化** — `get()` / `get_with_trace()` 的第二參數新增接受「`PathMode` 清單」或「單一 `PathMode`」，
+  由 `_coerce_waterfall()` 正規化為 `Waterfall`。使用者可寫
+  `pm.get("cfg", [PathMode.PROJ_ABSOLUTE, PathMode.CWD])`，不必先 import / 建構 `Waterfall`。
+  既有的 `Waterfall(...)` 與 preset 用法完全不受影響。型別別名 `WaterfallSpec` 已匯出供 hint 使用。
+
+新增 20 個測試（register_many / mapping sugar / waterfall coercion），全套
+`tests/path/test_path_manager.py` 137 tests / 9 subtests 全綠。
 
 ## 保留項目（未來版本）
 

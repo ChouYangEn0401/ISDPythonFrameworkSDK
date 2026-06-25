@@ -22,19 +22,29 @@ Quick start
     # Configure once at entry point (e.g. main.py / app.py)
     pm.set_proj_root(__file__, levels_up=1)   # go 1 level up from main.py
 
-    pm.register("data_in",   "data/inputs",     description="Raw input files")
-    pm.register("data_out",  "data/outputs",    description="Generated outputs")
-    pm.register("error_log", "logs/error.log",  description="Runtime error log")
+    # Register many paths sharing one anchor in a single call — no need to
+    # repeat the anchor (or even import PathMode) on every line:
+    pm.register_many(
+        {
+            "data_in":   "data/inputs",
+            "data_out":  "data/outputs",
+            "error_log": "logs/error.log",
+        },
+        anchor=PathMode.PROJ_ABSOLUTE,
+        descriptions={"data_in": "Raw input files"},
+    )
 
     # Read from anywhere in the codebase
-    from isd_py_framework_sdk.path_manager import SingletonPathManager, PathMode
     pm = SingletonPathManager()                   # same singleton instance
 
     path = pm.get("data_in")                      # absolute Path
-    rel  = pm.get("data_in", PathMode.PROJ_RELATIVE)  # relative Path
+    path = pm["data_in"]                          # same thing, dict-style
+    if "data_in" in pm: ...                       # membership test
 
-    # Waterfall: first existing path wins
+    # Waterfall: first existing path wins. Pass a preset, or just a list
+    # of PathModes — no Waterfall(...) construction needed:
     path = pm.get("config", Waterfall.UNIVERSAL)
+    path = pm.get("config", [PathMode.PROJ_ABSOLUTE, PathMode.CWD])
 ```
 Quick start example: 
 The above program demonstrates how to obtain a `SingletonPathManager` instance, 
@@ -66,11 +76,11 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Iterator, Mapping, Optional, Union
 
 from .interface import IPathManager
 from ._enums import PathMode
-from ._waterfall import Waterfall, ResolveIntent, WaterfallTrace
+from ._waterfall import Waterfall, ResolveIntent, WaterfallSpec, WaterfallTrace
 from ._conflict import ConflictStrategy, IncrementSuffixStrategy
 from ._registry import PathEntry, PathRegistry
 from ._resolver import EnvironmentResolver
@@ -141,11 +151,13 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
             root = root.parent
         for _ in range(levels_up):
             root = root.parent
-        self._proj_root = root
+        with self._lock:
+            self._proj_root = root
 
     def set_default_conflict_strategy(self, strategy: ConflictStrategy) -> None:
         """Replace the strategy used by ``resolve_conflict`` when no explicit one is given."""
-        self._default_conflict_strategy = strategy
+        with self._lock:
+            self._default_conflict_strategy = strategy
 
     # ------------------------------------------------------------------ #
     #  Anchor remapping                                                    #
@@ -203,7 +215,8 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
         Affects ``USER_CONFIG``, ``USER_DATA``, and ``USER_CACHE`` directory
         names (e.g. ``~/.config/<name>``).  Defaults to ``"app"``.
         """
-        self._app_name = name
+        with self._lock:
+            self._app_name = name
 
     # ------------------------------------------------------------------ #
     #  Registry                                                            #
@@ -249,9 +262,55 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
                 )
             )
 
+    def register_many(
+        self,
+        paths: Mapping[str, Union[Path, str]],
+        anchor: PathMode,
+        *,
+        descriptions: Optional[Mapping[str, str]] = None,
+    ) -> None:
+        """
+        Register many tags that share one *anchor* in a single call.
+
+        Same contract as :meth:`IPathManager.register_many`, but the whole
+        batch is inserted under a single lock acquisition — the registry
+        never observes a half-applied batch::
+
+            pm.register_many(
+                {
+                    "data_in":  "data/inputs",
+                    "data_out": "data/outputs",
+                    "err_log":  "logs/error.log",
+                },
+                anchor=PathMode.PROJ_ABSOLUTE,
+                descriptions={"data_in": "raw input files"},
+            )
+        """
+        descriptions = descriptions or {}
+        unknown = set(descriptions) - set(paths)
+        if unknown:
+            raise KeyError(
+                "register_many(): descriptions has tags not present in "
+                f"paths: {sorted(unknown)}"
+            )
+        # Build every entry first so a bad path raises before any insertion.
+        entries = [
+            PathEntry(
+                tag=tag,
+                stored_path=Path(path),
+                anchor=anchor,
+                description=descriptions.get(tag, ""),
+            )
+            for tag, path in paths.items()
+        ]
+        with self._lock:
+            for entry in entries:
+                self._registry.add(entry)
+
     def unregister(self, tag: str) -> None:
         """Remove *tag* from the registry.  Raises ``KeyError`` if absent."""
-        self._registry.remove(tag)
+        with self._lock:
+            self._registry.remove(tag)
 
     def has(self, tag: str) -> bool:
         """Return ``True`` if *tag* is currently registered."""
@@ -264,7 +323,7 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
     def get(
         self,
         tag: str,
-        waterfall: Optional[Waterfall] = None,
+        waterfall: Optional[WaterfallSpec] = None,
         *,
         intent: ResolveIntent = ResolveIntent.READ,
     ) -> Path:
@@ -275,10 +334,16 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
             Resolves using the anchor declared at registration.
             Always returns an absolute ``Path``.
 
-        ``get(tag, Waterfall.XYZ)``
-            Tries each mode in the waterfall in order (combining that
-            mode's base dir with the stored relative path).  Returns the
-            first path that satisfies *intent*:
+        ``get(tag, <waterfall>)``
+            Tries each mode in order (combining that mode's base dir with
+            the stored relative path) and returns the first path that
+            satisfies *intent*.  The second argument may be:
+
+            * a built ``Waterfall`` (e.g. ``Waterfall.EXE_PREFER_BUNDLED``),
+            * a plain list of modes — ``[PathMode.PROJ_ABSOLUTE, PathMode.CWD]``,
+            * or a single ``PathMode``.
+
+            *intent* controls what "satisfies" means:
 
             * ``ResolveIntent.READ``  — the path must exist on disk
             * ``ResolveIntent.WRITE`` — the path's *parent* must exist
@@ -288,7 +353,9 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
         """
         entry = self._registry.get(tag)
         if waterfall is not None:
-            return self._resolve_waterfall(entry, waterfall, intent=intent)
+            return self._resolve_waterfall(
+                entry, self._coerce_waterfall(waterfall), intent=intent
+            )
         return self._to_absolute(entry)
 
     def as_relative(self, tag: str, base: PathMode) -> Path:
@@ -315,7 +382,7 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
     def get_with_trace(
         self,
         tag: str,
-        waterfall: Waterfall,
+        waterfall: WaterfallSpec,
         *,
         intent: ResolveIntent = ResolveIntent.READ,
     ) -> "tuple[Optional[Path], WaterfallTrace]":
@@ -324,11 +391,13 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
 
         Returns ``(path, trace)`` where *path* is ``None`` on failure.
         Use this to debug waterfall resolution or build conditional logic
-        without try/except.
+        without try/except.  *waterfall* accepts the same forms as
+        :meth:`get` — a ``Waterfall``, a ``PathMode``, or a list of modes.
         """
         entry = self._registry.get(tag)
+        wf = self._coerce_waterfall(waterfall)
         resolver = lambda mode: self._apply_anchor(entry.stored_path, mode)
-        return waterfall.resolve(resolver, intent=intent, with_trace=True)  # type: ignore[return-value]
+        return wf.resolve(resolver, intent=intent, with_trace=True)  # type: ignore[return-value]
 
     def exists(self, tag: str) -> bool:
         """
@@ -411,8 +480,55 @@ class SingletonPathManager(IPathManager, metaclass=SingletonABCMeta):
         return target
 
     # ------------------------------------------------------------------ #
+    #  Mapping-style sugar (no new concepts — mirrors get/has/list_tags)  #
+    # ------------------------------------------------------------------ #
+
+    def __getitem__(self, tag: str) -> Path:
+        """``pm["data_in"]`` — shorthand for ``pm.get("data_in")``."""
+        return self.get(tag)
+
+    def __contains__(self, tag: object) -> bool:
+        """``"data_in" in pm`` — shorthand for ``pm.has("data_in")``."""
+        return isinstance(tag, str) and self.has(tag)
+
+    def __len__(self) -> int:
+        """Number of registered tags."""
+        return len(self._registry.all_entries())
+
+    def __iter__(self) -> Iterator[str]:
+        """Iterate over the registered tags."""
+        return iter(self._registry.all_entries())
+
+    # ------------------------------------------------------------------ #
     #  Private helpers                                                     #
     # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _coerce_waterfall(spec: WaterfallSpec) -> Waterfall:
+        """
+        Normalise whatever the caller passed into a ``Waterfall``.
+
+        Accepts a ready-made ``Waterfall`` (returned as-is), a single
+        ``PathMode``, or any sequence of ``PathMode`` — so callers can write
+        ``pm.get("cfg", [PathMode.PROJ_ABSOLUTE, PathMode.CWD])`` without
+        importing or constructing ``Waterfall`` themselves.
+        """
+        if isinstance(spec, Waterfall):
+            return spec
+        if isinstance(spec, PathMode):
+            return Waterfall(spec)
+        try:
+            steps = tuple(spec)
+        except TypeError:
+            raise TypeError(
+                "waterfall must be a Waterfall, a PathMode, or a sequence of "
+                f"PathMode — got {type(spec).__name__}."
+            ) from None
+        if not steps or not all(isinstance(s, PathMode) for s in steps):
+            raise TypeError(
+                "a waterfall sequence must contain one or more PathMode values."
+            )
+        return Waterfall(*steps)
 
     def _anchor_dir(self, mode: PathMode) -> Path:
         """
