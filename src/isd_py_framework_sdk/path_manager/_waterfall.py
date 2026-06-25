@@ -85,7 +85,7 @@ import os
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence, Union
 
 from ._enums import PathMode
 
@@ -520,4 +520,14 @@ PRESETS: dict[str, "Waterfall"] = {
     "ETL_OUTPUT":           Waterfall.ETL_OUTPUT,
     "UNIVERSAL":            Waterfall.UNIVERSAL,
 }
+
+
+# ------------------------------------------------------------------ #
+#  WaterfallSpec — what callers may pass where a fallback chain is    #
+#  expected. Lets users skip the Waterfall constructor for ad-hoc     #
+#  chains: pm.get("cfg", [PathMode.PROJ_ABSOLUTE, PathMode.CWD]).      #
+#  使用者可直接傳 PathMode 清單，不必先建構 Waterfall。                  #
+# ------------------------------------------------------------------ #
+
+WaterfallSpec = Union["Waterfall", PathMode, Sequence[PathMode]]
 

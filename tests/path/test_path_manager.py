@@ -1087,6 +1087,158 @@ class TestAnchorRemap(unittest.TestCase):
 
 
 # ===========================================================================
+#  20. register_many() — bulk registration with a shared anchor
+# ===========================================================================
+
+class TestRegisterMany(unittest.TestCase):
+
+    def setUp(self):
+        self.pm = _fresh_manager()
+        self.pm.set_proj_root(__file__, levels_up=2)
+        self.proj_root = Path(__file__).resolve().parent.parent.parent
+
+    def test_registers_all_tags(self):
+        self.pm.register_many(
+            {"a": "data/a", "b": "data/b", "c": "logs/c.log"},
+            anchor=PathMode.PROJ_ABSOLUTE,
+        )
+        for tag in ("a", "b", "c"):
+            self.assertTrue(self.pm.has(tag))
+        self.assertEqual(self.pm.get("a"), (self.proj_root / "data/a").resolve())
+
+    def test_shared_anchor_applied_to_every_entry(self):
+        self.pm.register_many(
+            {"x": "x.txt", "y": "y.txt"}, anchor=PathMode.SYSTEM_TEMP
+        )
+        self.assertTrue(
+            str(self.pm.get("x")).startswith(str(EnvironmentResolver.system_temp_root()))
+        )
+
+    def test_descriptions_are_attached(self):
+        self.pm.register_many(
+            {"a": "data/a", "b": "data/b"},
+            anchor=PathMode.PROJ_ABSOLUTE,
+            descriptions={"a": "first"},
+        )
+        tags = self.pm.list_tags()
+        self.assertEqual(tags["a"], "first")
+        self.assertEqual(tags["b"], "")  # omitted → empty
+
+    def test_unknown_description_key_raises(self):
+        with self.assertRaises(KeyError):
+            self.pm.register_many(
+                {"a": "data/a"},
+                anchor=PathMode.PROJ_ABSOLUTE,
+                descriptions={"typo": "oops"},
+            )
+
+    def test_atomic_no_partial_registration_on_bad_path(self):
+        """A bad path in the batch must not leave earlier tags registered."""
+        with self.assertRaises(TypeError):
+            self.pm.register_many(
+                {"good": "data/ok", "bad": 12345},  # int path → Path() rejects
+                anchor=PathMode.PROJ_ABSOLUTE,
+            )
+        self.assertFalse(self.pm.has("good"))
+        self.assertFalse(self.pm.has("bad"))
+
+    def test_equivalent_to_individual_register_calls(self):
+        self.pm.register_many(
+            {"one": "data/one"}, anchor=PathMode.PROJ_ABSOLUTE
+        )
+        other = _fresh_manager()
+        other.set_proj_root(__file__, levels_up=2)
+        other.register("one", "data/one", PathMode.PROJ_ABSOLUTE)
+        self.assertEqual(self.pm.get("one"), other.get("one"))
+
+
+# ===========================================================================
+#  21. Mapping-style sugar — __getitem__ / __contains__ / __len__ / __iter__
+# ===========================================================================
+
+class TestMappingSugar(unittest.TestCase):
+
+    def setUp(self):
+        self.pm = _fresh_manager()
+        self.pm.set_proj_root(__file__, levels_up=2)
+        self.pm.register_many(
+            {"a": "data/a", "b": "data/b"}, anchor=PathMode.PROJ_ABSOLUTE
+        )
+
+    def test_getitem_matches_get(self):
+        self.assertEqual(self.pm["a"], self.pm.get("a"))
+
+    def test_getitem_missing_raises_keyerror(self):
+        with self.assertRaises(KeyError):
+            self.pm["ghost"]
+
+    def test_contains_true(self):
+        self.assertIn("a", self.pm)
+
+    def test_contains_false(self):
+        self.assertNotIn("ghost", self.pm)
+
+    def test_contains_non_string_is_false(self):
+        self.assertNotIn(123, self.pm)
+
+    def test_len(self):
+        self.assertEqual(len(self.pm), 2)
+
+    def test_iter_yields_tags(self):
+        self.assertEqual(set(iter(self.pm)), {"a", "b"})
+
+
+# ===========================================================================
+#  22. Waterfall as a plain list / single PathMode (no Waterfall(...) needed)
+# ===========================================================================
+
+class TestWaterfallCoercion(unittest.TestCase):
+
+    def setUp(self):
+        self.pm = _fresh_manager()
+        self.pm.set_proj_root(__file__, levels_up=2)
+
+    def test_list_of_modes_resolves(self):
+        self.pm.register("w", "", PathMode.SYSTEM_TEMP)
+        p = self.pm.get("w", [PathMode.PROJ_ABSOLUTE, PathMode.SYSTEM_TEMP])
+        self.assertTrue(p.exists())
+
+    def test_list_equivalent_to_waterfall_object(self):
+        self.pm.register("w", "", PathMode.SYSTEM_TEMP)
+        via_list = self.pm.get("w", [PathMode.PROJ_ABSOLUTE, PathMode.SYSTEM_TEMP])
+        via_obj = self.pm.get("w", Waterfall(PathMode.PROJ_ABSOLUTE, PathMode.SYSTEM_TEMP))
+        self.assertEqual(via_list, via_obj)
+
+    def test_single_pathmode_resolves(self):
+        self.pm.register("w", "", PathMode.SYSTEM_TEMP)
+        p = self.pm.get("w", PathMode.SYSTEM_TEMP)
+        self.assertTrue(p.exists())
+
+    def test_tuple_also_accepted(self):
+        self.pm.register("w", "", PathMode.SYSTEM_TEMP)
+        p = self.pm.get("w", (PathMode.PROJ_ABSOLUTE, PathMode.SYSTEM_TEMP))
+        self.assertTrue(p.exists())
+
+    def test_get_with_trace_accepts_list(self):
+        self.pm.register("w", "", PathMode.SYSTEM_TEMP)
+        path, trace = self.pm.get_with_trace(
+            "w", [PathMode.PROJ_ABSOLUTE, PathMode.SYSTEM_TEMP]
+        )
+        self.assertIsNotNone(path)
+        self.assertTrue(trace.succeeded)
+
+    def test_empty_list_raises_typeerror(self):
+        self.pm.register("w", "x", PathMode.PROJ_ABSOLUTE)
+        with self.assertRaises(TypeError):
+            self.pm.get("w", [])
+
+    def test_non_pathmode_element_raises_typeerror(self):
+        self.pm.register("w", "x", PathMode.PROJ_ABSOLUTE)
+        with self.assertRaises(TypeError):
+            self.pm.get("w", ["not_a_mode"])
+
+
+# ===========================================================================
 #  Entry point
 # ===========================================================================
 

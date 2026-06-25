@@ -19,10 +19,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Mapping, Optional, Union
 
 from ._enums import PathMode
-from ._waterfall import Waterfall, ResolveIntent, WaterfallTrace
+from ._waterfall import Waterfall, ResolveIntent, WaterfallSpec, WaterfallTrace
 from ._conflict import ConflictStrategy
 
 
@@ -64,6 +64,48 @@ class IPathManager(ABC):
         """
         ...
 
+    def register_many(
+        self,
+        paths: Mapping[str, Union[Path, str]],
+        anchor: PathMode,
+        *,
+        descriptions: Optional[Mapping[str, str]] = None,
+    ) -> None:
+        """
+        Register many tags that share one *anchor* in a single call.
+
+        A thin convenience over :meth:`register` — equivalent to calling
+        it once per item with the same *anchor*, but without repeating the
+        anchor (and its ``PathMode`` import) on every line::
+
+            pm.register_many(
+                {
+                    "data_in":  "data/inputs",
+                    "data_out": "data/outputs",
+                    "err_log":  "logs/error.log",
+                },
+                anchor=PathMode.PROJ_ABSOLUTE,
+                descriptions={"data_in": "raw input files"},
+            )
+
+        *descriptions* is an optional ``tag -> text`` mapping; tags omitted
+        from it get an empty description.  Description keys not present in
+        *paths* raise ``KeyError`` to surface typos early.
+
+        This default implementation is defined purely in terms of
+        :meth:`register`, so every subclass gets it for free.  Subclasses
+        may override it for atomic / batched insertion.
+        """
+        descriptions = descriptions or {}
+        unknown = set(descriptions) - set(paths)
+        if unknown:
+            raise KeyError(
+                "register_many(): descriptions has tags not present in "
+                f"paths: {sorted(unknown)}"
+            )
+        for tag, path in paths.items():
+            self.register(tag, path, anchor, description=descriptions.get(tag, ""))
+
     @abstractmethod
     def unregister(self, tag: str) -> None:
         """Remove *tag* from the registry.  Raises ``KeyError`` if absent."""
@@ -82,7 +124,7 @@ class IPathManager(ABC):
     def get(
         self,
         tag: str,
-        waterfall: Optional[Waterfall] = None,
+        waterfall: Optional[WaterfallSpec] = None,
         *,
         intent: ResolveIntent = ResolveIntent.READ,
     ) -> Path:
@@ -92,9 +134,10 @@ class IPathManager(ABC):
         ``get(tag)``
             Resolves using the anchor declared at registration.
 
-        ``get(tag, Waterfall.XYZ)``
-            Cross-environment override: tries each PathMode in the
-            waterfall, returning the first satisfying *intent*.
+        ``get(tag, Waterfall.XYZ)`` / ``get(tag, [PathMode.A, PathMode.B])``
+            Cross-environment override: tries each PathMode in order,
+            returning the first satisfying *intent*.  Accepts a built
+            ``Waterfall``, a bare ``PathMode``, or a plain list of them.
         """
         ...
 
@@ -113,7 +156,7 @@ class IPathManager(ABC):
     def get_with_trace(
         self,
         tag: str,
-        waterfall: Waterfall,
+        waterfall: WaterfallSpec,
         *,
         intent: ResolveIntent = ResolveIntent.READ,
     ) -> "tuple[Optional[Path], WaterfallTrace]":
@@ -143,10 +186,6 @@ class IPathManager(ABC):
     def info(self) -> str:
         """Return a diagnostic string: environment state + full tag registry."""
         ...
-
-    # ------------------------------------------------------------------ #
-    #  Conflict resolution                                                 #
-    # ------------------------------------------------------------------ #
 
     # ------------------------------------------------------------------ #
     #  Anchor remapping                                                    #
