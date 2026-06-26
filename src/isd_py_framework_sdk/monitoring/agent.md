@@ -188,6 +188,16 @@ from isd_py_framework_sdk.monitoring import (
 - 需要完整功能（timestamp、多 adapter）時由呼叫端傳入 logger 實例
 - 這使得 `monitoring` 可以在不安裝 `[message_logger]` extras 的環境下運作
 
+### 對外橋接依賴（純型別）
+
+`looped_function_timer.py` 唯一碰到 `message_logger` 的地方是型別 `LogLevelLiteral`，且**只用於型別註解、執行期完全不需要**。因此它走 `from __future__ import annotations` + `if TYPE_CHECKING:` import，**runtime 完全沒有 import `message_logger`**（見 [`interop/agent.md`](../interop/agent.md) 橋接表 #3）。
+
+| 觸發時機 | 被用到的子套件 | 需要的 extra |
+|---|---|---|
+| 無 runtime 觸發（純型別 `LogLevelLiteral`） | `message_logger`（型別） | 無 |
+
+因為沒有 runtime 重依賴可缺，這條「橋」不經過 `interop.require_feature`；列入橋接表只是為了帳本完整。
+
 ---
 
 ## 常見陷阱

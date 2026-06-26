@@ -1,12 +1,18 @@
+from __future__ import annotations
+
 import datetime
 import functools
 import sys
 import time
 from dataclasses import dataclass, field
 from statistics import mean
-from typing import Callable, Literal, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Callable, Literal, Optional, Protocol, runtime_checkable
 
-from isd_py_framework_sdk.message_logger import LogLevelLiteral
+if TYPE_CHECKING:
+    # Type-only cross-module reference (see interop/agent.md bridge #3).
+    # message_logger is core/zero-heavy-dep and never needed at runtime here, so
+    # this stays out of the runtime import graph entirely.
+    from isd_py_framework_sdk.message_logger import LogLevelLiteral
 
 
 # ---------------------------------------------------------------------------

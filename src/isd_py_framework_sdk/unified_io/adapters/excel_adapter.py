@@ -175,7 +175,11 @@ class ExcelIOAdapter(IIOAdapter):
         **kwargs,
     ) -> None:
         """Bridge to excel_painter for a fully styled table write."""
-        from ...excel_painter import TableStyle, save_styled_table
+        from ...interop import require_feature
+
+        excel_painter = require_feature("excel_painter")
+        TableStyle = excel_painter.TableStyle
+        save_styled_table = excel_painter.save_styled_table
 
         table_style = style if isinstance(style, TableStyle) else None
         save_styled_table(
@@ -217,9 +221,15 @@ class ExcelIOAdapter(IIOAdapter):
         5. restore snapshot (fills, freeze, merges, column widths)
         6. save
         """
-        from openpyxl import load_workbook
+        from ...interop import require_feature
 
-        from ...excel_painter import SheetFormatSnapshot
+        # Resolve the excel_painter bridge first so a missing openpyxl yields the
+        # SDK's standard "pip install ...[excel_painter]" message rather than a
+        # bare ImportError from the line below.
+        excel_painter = require_feature("excel_painter")
+        SheetFormatSnapshot = excel_painter.SheetFormatSnapshot
+
+        from openpyxl import load_workbook
 
         if not dest.exists():
             # File does not exist yet — fall back to fresh write

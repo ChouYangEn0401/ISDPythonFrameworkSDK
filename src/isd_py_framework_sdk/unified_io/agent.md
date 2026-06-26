@@ -99,7 +99,7 @@ class IIOAdapter(IReader, IWriter, ABC): ...
 
 ## 已知注意事項 / 待辦
 
-- **`preserve` 模式依賴 `excel_painter.SheetFormatSnapshot`**（同 repo 的 sibling 子套件，已實作）。需要 `[unified_io.excel]` 或 `[excel_painter]` extra（openpyxl）。
+- **`preserve` / `styled` 模式依賴 `excel_painter`**（同 repo 的 sibling 子套件，已實作）。此跨模組呼叫**經由 `interop.require_feature("excel_painter")`** 取得（見 [`interop/agent.md`](../interop/agent.md) 橋接表 #2），缺 `openpyxl` 時丟標準 `MissingOptionalDependencyError`。需要 `[unified_io.excel]` 或 `[excel_painter]` extra（openpyxl）。
 - **沒有 pytest 測試檔**。建議在 `tests/` 補上 round-trip 測試（CSV/JSON/JSONL/Excel-fresh/inplace/preserve）。
 - `pandas` 是所有 adapter 的必要依賴；openpyxl / sqlalchemy 在對應 adapter 內 lazy 檢查並給出安裝提示。
 - `legacy.sql_writer.py` 為舊腳本（含 Tkinter GUI、硬編 batch 邏輯），非套件 API，可移除以減少混淆。
