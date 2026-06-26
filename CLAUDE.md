@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 專案概覽
 
-**ISD Python Framework SDK** (`isd-py-framework-sdk`) 是一套底層基礎框架套件，提供所有 ISD 系列模組共用的設計模式與工具。版本 `0.7.0`，Python ≥ 3.11。
+**ISD Python Framework SDK** (`isd-py-framework-sdk`) 是一套底層基礎框架套件，提供所有 ISD 系列模組共用的設計模式與工具。版本 `0.9.0`，Python ≥ 3.11。
 
 - pip 安裝名：`isd-py-framework-sdk`
 - Python import 名：`isd_py_framework_sdk`
@@ -58,6 +58,9 @@ pip install -e ".[all]"
 .venv\Scripts\python.exe -m pytest -v tests/helpers/decorators_test.py
 .venv\Scripts\python.exe -m pytest -v tests/helpers/exceptions_test.py
 .venv\Scripts\python.exe -m pytest -v tests/path/test_path_manager.py
+.venv\Scripts\python.exe -m pytest -v tests/interop/test_interop.py
+.venv\Scripts\python.exe -m pytest -v tests/cipher_kit/test_cipher_kit.py
+.venv\Scripts\python.exe -m pytest -v tests/credential_vault/test_credential_vault.py
 
 # file_compare 測試
 .venv\Scripts\python.exe -m pytest -v tests/test_file/
@@ -79,7 +82,8 @@ pip install -e ".[all]"
 ```
 src/isd_py_framework_sdk/
 ├── _version.py                   版本號（動態 setuptools 來源）
-├── _optional.py                  optional 依賴管線（require / have / notify_substitution）
+├── _optional.py                  optional 依賴管線（require / have / notify_substitution）— 管「第三方套件」
+├── interop/                      跨模組橋接層（require_feature / has_feature）— 管「子套件之間」
 ├── __init__.py                   全部公開 API 的 flat 匯出點（PEP 562 lazy 載入）
 ├── cli.py                        CLI 入口（isd-py-framework-sdk -V）
 │
@@ -144,6 +148,16 @@ src/isd_py_framework_sdk/
 
 API 演進（改名 / 移除 / 實驗性）的對外通知，沿用 `helpers/decorators/lifecycle.py` 既有裝飾器：`deprecated` / `removed_in` / `since` / `experimental` / `battered`。這是「我們換掉了什麼」的官方通知機制，不要另造一套。
 
+### 跨模組橋接（`interop/`）— `_optional` 的對內版
+子套件原則上**解耦**，但有少數合理的跨模組呼叫（`credential_vault`→`cipher_kit`、`unified_io`→`excel_painter`、`monitoring`→`message_logger` 純型別）。這些呼叫統一收進 `interop`，避免散落腐爛、避免只裝部分 extra 的人壞掉。分工：
+
+- **`_optional`**：管「**第三方套件**」裝了沒（`cryptography` / `openpyxl`…）。
+- **`interop`**：管「**子套件之間**」誰用誰、缺了給什麼訊息——**建在 `_optional` 之上**，不重造。
+
+關鍵語意：`import isd_py_framework_sdk.cipher_kit` 這個動作**永遠成功**（子套件同包、延遲載入），真正可能缺的是它的重依賴（`cryptography`）。所以 `interop.require_feature(name)` 先用 `_optional.require()` 確認該 feature 的代表性重依賴可用（缺則丟標準 `MissingOptionalDependencyError`，附 `pip install ...[<extra>]`），再回傳子套件 module；`has_feature(name)` 為不丟例外的能力探測。
+
+**鐵則**：日後任何新增/修改的跨模組呼叫，都必須走 `interop.require_feature`（在真正用到的函式內 lazy 呼叫），並同步更新 `interop/agent.md` 的橋接表。`interop` 不放進頂層 flat 公開 API，是有文件管理的內部層。
+
 ### Extras 分層依賴策略
 預設安裝（`pip install isd-py-framework-sdk`）不包含任何 heavy 第三方依賴（`pandas`, `openpyxl`, `pyyaml`, `colorama`…）。每個版本下限只宣告一次（在擁有該依賴的 leaf extra），umbrella 與 `all` 以**自我引用**（`isd-py-framework-sdk[...]`）組合，確保 `all` 永遠是完整超集合、不會漂移。使用者依需要安裝對應 extras：
 
@@ -194,8 +208,9 @@ API 演進（改名 / 移除 / 實驗性）的對外通知，沿用 `helpers/dec
 | `helpers.exceptions` | 10 個面向的例外 | `isd_py_framework_sdk.exceptions` |
 | `unified_io` | `DataIO`, `IReader`, `IWriter`, `CsvIOAdapter`, `ExcelIOAdapter`, `JsonIOAdapter`, `SqlIOAdapter`；df 工具：`multiple_sort_dataframe`, `sort_dataframe`, `pick_and_reorder_then_rename_columns`, `dict_to_df` | `isd_py_framework_sdk.unified_io` |
 | `excel_painter` | `ExcelPainter`, `save_styled_table`, `TableStyle`, `SheetFormatSnapshot`, `STATUS_*` | `isd_py_framework_sdk.excel_painter` |
-| `cipher_kit` | `seal`, `unseal`, `CipherKit`, `PasswordCipher`, `RsaHybridCipher`, `LayeredCipher`, `OsKeyring`, `generate_rsa_keypair` | `isd_py_framework_sdk.cipher_kit` |
-| `credential_vault` | `CredentialVault`, `load_secret`, `OsEnvSource`, `DotEnvSource`, `YamlSource`, `JsonSource` | `isd_py_framework_sdk.credential_vault` |
+| `cipher_kit` | `seal`, `unseal`, `CipherKit`, `PasswordCipher`, `RsaHybridCipher`, `FernetCipher`, `RawKeyCipher`, `Aes256SivCipher`, `AesGcmSivCipher`, `LayeredCipher`, `OsKeyring`, `generate_rsa_keypair`, `generate_fernet_key`, `generate_aead_key`, `generate_aes_siv_key` | `isd_py_framework_sdk.cipher_kit` |
+| `credential_vault` | `CredentialVault`, `load_secret`（含 `prompt_password=` 執行時輸密碼）, `OsEnvSource`, `DotEnvSource`, `YamlSource`, `JsonSource` | `isd_py_framework_sdk.credential_vault` |
+| `interop`（內部層） | `require_feature`, `has_feature`, `FEATURE_EXTRAS` | `isd_py_framework_sdk.interop` |
 
 ---
 
@@ -207,4 +222,5 @@ API 演進（改名 / 移除 / 實驗性）的對外通知，沿用 `helpers/dec
 - `unified_io/.env` 不應版控（`.gitignore` 以 `**/.env` 排除；該檔含真實 MSSQL 憑證，切勿提交）。
 - `excel_painter` 的 `mode="preserve"`（經由 `unified_io`）與 `SheetFormatSnapshot` 不保留 `CellRichText`／charts／images／conditional-formatting，只還原 cell style。
 - `cipher_kit`：把 sealed token 與其 passphrase 放在同一個檔案（如同一份 `.env`）等於沒加密——務必用 `KeySource`（`OsKeyring` / `EnvSecret` / `PromptSecret`）從**不同來源**取得金鑰。金鑰遺失即資料遺失，無後門。`LayeredCipher` 的 token 不能用模組級 `unseal()` 自動解，需用相同 recipe 重建。
-- `cipher_kit` token 為自描述格式 `CK1.<header>.<body>`；同一明文每次 `seal` 因隨機 salt/nonce 而不同，勿用 token 字串做相等比較或快取鍵。`argon2id` 需 `[cipher_kit.argon2]`，未安裝時預設 KDF 自動降級為 `scrypt`，並發一次性 `DependencySubstitutionWarning` 通知（顯式指定 `argon2id` 但缺套件則拋 cipher_kit 自有的 `MissingDependencyError`）。注意此處有兩個相似但不同的錯誤：`cipher_kit.errors.MissingDependencyError`（`CipherKitError` 子類，cipher_kit 內部用）與核心 `_optional.MissingOptionalDependencyError`（`ImportError` 子類，跨模組共用，如 message_logger 缺 colorama）。
+- `cipher_kit` 除 password / RSA 外另有 4 個「自管金鑰」cipher（全用既有 `cryptography`，無新依賴）：`FernetCipher`（`fernet`）、`RawKeyCipher`（`rawkey`，模組級 `seal(secret_key=...)` 的預設路徑）、`Aes256SivCipher`（`aes-siv`）、`AesGcmSivCipher`（`aes-gcm-siv`）。它們吃 raw 金鑰（用 `generate_fernet_key` / `generate_aead_key` / `generate_aes_siv_key` 產生）、不走 KDF；模組級 `unseal(token, secret_key=...)` 依 header 自動派發、可組進 `LayeredCipher`。**`Aes256SivCipher` 是確定性的**（同明文同金鑰→同 token，方便去重/盲索引，代價是洩漏明文相等性）——不要它時用隨機化 cipher。
+- `cipher_kit` token 為自描述格式 `CK1.<header>.<body>`；password/RSA/rawkey/aes-gcm-siv 等隨機化 cipher 同一明文每次 `seal` 因隨機 salt/nonce 而不同，勿用 token 字串做相等比較或快取鍵（唯一例外是刻意確定性的 `aes-siv`）。`argon2id` 需 `[cipher_kit.argon2]`，未安裝時預設 KDF 自動降級為 `scrypt`，並發一次性 `DependencySubstitutionWarning` 通知（顯式指定 `argon2id` 但缺套件則拋 cipher_kit 自有的 `MissingDependencyError`）。注意此處有兩個相似但不同的錯誤：`cipher_kit.errors.MissingDependencyError`（`CipherKitError` 子類，cipher_kit 內部用）與核心 `_optional.MissingOptionalDependencyError`（`ImportError` 子類，跨模組共用，如 message_logger 缺 colorama）。
