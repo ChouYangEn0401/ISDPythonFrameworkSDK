@@ -62,8 +62,9 @@ pip install -e ".[all]"
 .venv\Scripts\python.exe -m pytest -v tests/cipher_kit/test_cipher_kit.py
 .venv\Scripts\python.exe -m pytest -v tests/credential_vault/test_credential_vault.py
 
-# file_compare 測試
-.venv\Scripts\python.exe -m pytest -v tests/test_file/
+# file_compare 測試（script 式，直接執行；先產生樣本）
+.venv\Scripts\python.exe tests/test_file/generate_samples.py
+.venv\Scripts\python.exe tests/test_file/test_csv.py   # 其餘 test_json/jsonl/txt/xml/yaml/toml/ini/excel 同理
 
 # monitoring 整合測試（非 pytest，直接執行）
 .venv\Scripts\python.exe examples/monitoring/different_usecase.py
@@ -74,6 +75,16 @@ pip install -e ".[all]"
 ```
 
 `test_runner.bat` 列出所有單元測試的逐一執行指令，可作為參考。
+
+### 測試慣例（重要，否則會誤判「沒測到」）
+
+本專案沒有 pytest 設定檔，沿用預設 `python_files = test_*.py`，因此測試分兩類：
+
+- **真 pytest（檔名 `test_*.py`、函式 `test_*`）**：`path` / `excel_painter` / `cipher_kit` / `credential_vault` / `interop`。可用 `pytest -q tests/<dir>`。
+- **script 式自我驗證（`*_test.py` 或 `__main__` 腳本）**：`base` / `events` / `helpers` / `test_file`。pytest **目錄掃描不會收集它們**（會顯示「no tests ran」）；請用 `python <file>` 直接執行，靠內部 `assert` / 自製 harness 驗證。
+- **整包 `tests/` 一起跑會在 capture teardown 崩潰**（某模組 import 時關閉 stdout）——請**分目錄／分檔**跑。
+- Windows cp950 主控台：script 式測試會印 `✔`/`✘`，**重導 stdout 時**請先 `set PYTHONIOENCODING=utf-8`（PowerShell：`$env:PYTHONIOENCODING="utf-8"`），否則 `UnicodeEncodeError`（非邏輯失敗）。
+- `unified_io` 目前**無自動化測試**（見其 `agent.md`）；驗證 Excel `styled`/`preserve` 走 `excel_painter` 橋接時，請手動 round-trip。
 
 ---
 
