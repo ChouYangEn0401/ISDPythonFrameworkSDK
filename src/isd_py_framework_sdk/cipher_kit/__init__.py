@@ -59,10 +59,14 @@ Design notes
 from __future__ import annotations
 
 from .ciphers import (
+    Aes256SivCipher,
+    AesGcmSivCipher,
     Cipher,
+    FernetCipher,
     IdentityCipher,
     LayeredCipher,
     PasswordCipher,
+    RawKeyCipher,
     RsaHybridCipher,
 )
 from .envelope import decode_token, is_token
@@ -74,6 +78,7 @@ from .errors import (
     MissingKeyError,
 )
 from .kdf import default_kdf, have_argon2
+from .keygen import generate_aead_key, generate_aes_siv_key, generate_fernet_key
 from .key_sources import (
     EnvSecret,
     KeyFileSource,
@@ -94,6 +99,10 @@ __all__ = [
     "IdentityCipher",
     "PasswordCipher",
     "RsaHybridCipher",
+    "FernetCipher",
+    "RawKeyCipher",
+    "Aes256SivCipher",
+    "AesGcmSivCipher",
     "LayeredCipher",
     # key sources
     "KeySource",
@@ -104,6 +113,9 @@ __all__ = [
     "OsKeyring",
     # helpers
     "generate_rsa_keypair",
+    "generate_fernet_key",
+    "generate_aead_key",
+    "generate_aes_siv_key",
     "is_token",
     "decode_token",
     "default_kdf",
@@ -123,6 +135,7 @@ def seal(
     password: str | None = None,
     key_source: KeySource | None = None,
     public_key=None,
+    secret_key: bytes | None = None,
     aead: str = "aes-256-gcm",
     kdf: str | None = None,
     encoding: str = "utf-8",
@@ -134,6 +147,13 @@ def seal(
 
     * ``password=`` or ``key_source=``  → passphrase-based symmetric encryption.
     * ``public_key=``                   → RSA hybrid (asymmetric) encryption.
+    * ``secret_key=`` (raw 32 bytes)    → :class:`RawKeyCipher` AEAD (no KDF;
+      you already hold a strong key).  Pick the AEAD with ``aead=``.
+
+    For the other raw-key ciphers (Fernet, AES-SIV, AES-GCM-SIV) use the explicit
+    factories — :meth:`CipherKit.fernet`, :meth:`CipherKit.aes_siv`,
+    :meth:`CipherKit.aes_gcm_siv` — or the cipher classes directly.  (``unseal``
+    routes *all* of them automatically, since the token is self-describing.)
 
     Advanced knobs (``aead``, ``kdf``, and KDF cost params like ``time_cost``)
     are optional; the defaults are already a sound modern choice.
@@ -141,13 +161,16 @@ def seal(
     raw = data.encode(encoding) if isinstance(data, str) else data
     if public_key is not None:
         cipher: Cipher = RsaHybridCipher(public_key=public_key, aead=aead)
+    elif secret_key is not None:
+        cipher = RawKeyCipher(secret_key, aead=aead)
     elif password is not None or key_source is not None:
         cipher = PasswordCipher(
             password=password, key_source=key_source, aead=aead, kdf=kdf, **kdf_params
         )
     else:
         raise MissingKeyError(
-            "seal() needs key material: pass password=, key_source=, or public_key=."
+            "seal() needs key material: pass password=, key_source=, public_key=, "
+            "or secret_key=."
         )
     return cipher.seal(raw)
 
@@ -158,15 +181,21 @@ def unseal(
     password: str | None = None,
     key_source: KeySource | None = None,
     private_key=None,
+    secret_key: bytes | None = None,
     encoding: str = "utf-8",
     as_bytes: bool = False,
 ) -> str | bytes:
     """Unseal a ``CK1`` *token* back to the original secret.
 
     The cipher used is read from the token itself; just supply the matching key
-    material (``password=``/``key_source=`` for symmetric tokens,
-    ``private_key=`` for RSA-hybrid tokens).  Returns ``str`` by default, or
-    ``bytes`` when ``as_bytes=True``.
+    material:
+
+    * ``password=`` / ``key_source=`` — passphrase-based symmetric tokens;
+    * ``private_key=``                — RSA-hybrid tokens;
+    * ``secret_key=`` (raw bytes / Fernet key) — the raw-key ciphers
+      (``fernet`` / ``rawkey`` / ``aes-siv`` / ``aes-gcm-siv``).
+
+    Returns ``str`` by default, or ``bytes`` when ``as_bytes=True``.
     """
     header, _ = decode_token(token)
     name = header.get("cipher")
@@ -176,10 +205,27 @@ def unseal(
         cipher = IdentityCipher()
     elif name in ("aes-256-gcm", "chacha20-poly1305"):
         cipher = PasswordCipher(password=password, key_source=key_source)
+    elif name == "fernet":
+        cipher = FernetCipher(_need_secret_key(secret_key, name))
+    elif name == "rawkey":
+        cipher = RawKeyCipher(_need_secret_key(secret_key, name))
+    elif name == "aes-siv":
+        cipher = Aes256SivCipher(_need_secret_key(secret_key, name))
+    elif name == "aes-gcm-siv":
+        cipher = AesGcmSivCipher(_need_secret_key(secret_key, name))
     else:
         raise InvalidTokenError(f"Unknown cipher in token: {name!r}")
     raw = cipher.unseal(token)
     return raw if as_bytes else raw.decode(encoding)
+
+
+def _need_secret_key(secret_key, cipher_name: str):
+    """Ensure ``secret_key=`` was supplied for a raw-key token, else explain."""
+    if secret_key is None:
+        raise MissingKeyError(
+            f"unseal() needs secret_key= to open a {cipher_name!r} token."
+        )
+    return secret_key
 
 
 class CipherKit:
@@ -216,6 +262,29 @@ class CipherKit:
     @classmethod
     def rsa(cls, *, public_key=None, private_key=None, aead: str = "aes-256-gcm") -> "CipherKit":
         return cls(RsaHybridCipher(public_key=public_key, private_key=private_key, aead=aead))
+
+    @classmethod
+    def fernet(cls, key: bytes | str) -> "CipherKit":
+        """Fernet (AES-128-CBC + HMAC).  ``key`` from :func:`generate_fernet_key`."""
+        return cls(FernetCipher(key))
+
+    @classmethod
+    def raw_key(cls, key: bytes, *, aead: str = "aes-256-gcm") -> "CipherKit":
+        """AEAD with a caller-supplied 32-byte key (no KDF).  See
+        :func:`generate_aead_key`."""
+        return cls(RawKeyCipher(key, aead=aead))
+
+    @classmethod
+    def aes_siv(cls, key: bytes) -> "CipherKit":
+        """Deterministic AES-256-SIV.  ``key`` (64 bytes) from
+        :func:`generate_aes_siv_key`."""
+        return cls(Aes256SivCipher(key))
+
+    @classmethod
+    def aes_gcm_siv(cls, key: bytes) -> "CipherKit":
+        """Nonce-misuse-resistant AES-GCM-SIV.  ``key`` (16/32 bytes) from
+        :func:`generate_aead_key`."""
+        return cls(AesGcmSivCipher(key))
 
     @classmethod
     def layered(cls, layers) -> "CipherKit":

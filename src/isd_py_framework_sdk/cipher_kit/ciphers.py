@@ -38,6 +38,10 @@ __all__ = [
     "IdentityCipher",
     "PasswordCipher",
     "RsaHybridCipher",
+    "FernetCipher",
+    "RawKeyCipher",
+    "Aes256SivCipher",
+    "AesGcmSivCipher",
     "LayeredCipher",
 ]
 
@@ -229,6 +233,185 @@ class RsaHybridCipher(Cipher):
         except Exception as exc:  # noqa: BLE001
             raise DecryptionError(
                 "RSA-hybrid decryption failed — wrong key or tampered token."
+            ) from exc
+
+
+class FernetCipher(Cipher):
+    """Symmetric encryption via ``cryptography``'s **Fernet**.
+
+    Fernet is a batteries-included token format (AES-128-CBC + HMAC-SHA256,
+    versioned and timestamped).  It takes an *already-strong* key — a 32-byte key
+    encoded as url-safe base64, exactly what :func:`Fernet.generate_key` (or
+    :func:`cipher_kit.generate_fernet_key`) produces.  There is **no KDF**: bring
+    your own key, manage it elsewhere.
+
+    Provide the same ``key`` to :meth:`seal` and :meth:`unseal`.
+    """
+
+    def __init__(self, key: bytes | str):
+        if not key:
+            raise MissingKeyError("FernetCipher needs a key (see generate_fernet_key).")
+        self._key = key.encode("ascii") if isinstance(key, str) else bytes(key)
+
+    def _fernet(self):
+        from cryptography.fernet import Fernet
+
+        return Fernet(self._key)
+
+    def seal(self, data: bytes) -> str:
+        body = self._fernet().encrypt(data)  # url-safe base64 Fernet token (bytes)
+        return encode_token({"cipher": "fernet"}, body)
+
+    def unseal(self, token: str) -> bytes:
+        header, body = decode_token(token)
+        if header.get("cipher") != "fernet":
+            raise CipherKitError(
+                f"FernetCipher cannot unseal a {header.get('cipher')!r} token."
+            )
+        from cryptography.fernet import InvalidToken
+
+        try:
+            return self._fernet().decrypt(body)
+        except InvalidToken as exc:
+            raise DecryptionError(
+                "Fernet decryption failed — wrong key or tampered token."
+            ) from exc
+
+
+class RawKeyCipher(Cipher):
+    """AEAD with a caller-supplied **raw 32-byte key** — no KDF, no passphrase.
+
+    For callers who already hold a strong key (managed by an HSM/KMS, an OS
+    keyring, or :func:`cipher_kit.generate_aead_key`) and want symmetric AEAD
+    without the cost of a KDF.  Supply the *same* key to seal and unseal.
+
+    ``aead`` selects ``"aes-256-gcm"`` (default) or ``"chacha20-poly1305"``; both
+    need a 32-byte key.
+    """
+
+    def __init__(self, key: bytes, *, aead: str = "aes-256-gcm"):
+        if not isinstance(key, (bytes, bytearray)):
+            raise CipherKitError(
+                "RawKeyCipher key must be raw bytes (e.g. os.urandom(32) or "
+                "generate_aead_key())."
+            )
+        if len(key) != 32:
+            raise CipherKitError(
+                f"RawKeyCipher needs a 32-byte key, got {len(key)} bytes."
+            )
+        self._key = bytes(key)
+        self._aead = _normalise_aead(aead)
+
+    def seal(self, data: bytes) -> str:
+        nonce = os.urandom(_NONCE_LEN)
+        ciphertext = _aead(self._aead, self._key).encrypt(nonce, data, _AAD)
+        header = {"cipher": "rawkey", "aead": self._aead, "nonce": b64e(nonce)}
+        return encode_token(header, ciphertext)
+
+    def unseal(self, token: str) -> bytes:
+        header, ciphertext = decode_token(token)
+        if header.get("cipher") != "rawkey":
+            raise CipherKitError(
+                f"RawKeyCipher cannot unseal a {header.get('cipher')!r} token."
+            )
+        aead = _normalise_aead(header["aead"])
+        nonce = b64d(header["nonce"])
+        try:
+            return _aead(aead, self._key).decrypt(nonce, ciphertext, _AAD)
+        except Exception as exc:  # noqa: BLE001
+            raise DecryptionError(
+                "RawKey decryption failed — wrong key or tampered token."
+            ) from exc
+
+
+class Aes256SivCipher(Cipher):
+    """**Deterministic** AEAD (AES-256-SIV) — nonce-misuse resistant.
+
+    SIV mode needs no nonce and is *deterministic*: the same plaintext + key
+    (+ associated data) always yields the **same** token.  That makes sealed
+    values comparable / dedupable (e.g. a searchable blind index), at the
+    deliberate cost of leaking *equality* of plaintexts.  When you do **not**
+    want that, use a randomised cipher instead.
+
+    Needs a **64-byte** key (AES-256-SIV); see
+    :func:`cipher_kit.generate_aes_siv_key`.  Supply the same key to seal/unseal.
+    """
+
+    def __init__(self, key: bytes):
+        if not isinstance(key, (bytes, bytearray)):
+            raise CipherKitError("Aes256SivCipher key must be raw bytes.")
+        if len(key) != 64:
+            raise CipherKitError(
+                f"Aes256SivCipher needs a 64-byte key (AES-256-SIV), got {len(key)} bytes."
+            )
+        self._key = bytes(key)
+
+    def _siv(self):
+        from cryptography.hazmat.primitives.ciphers.aead import AESSIV
+
+        return AESSIV(self._key)
+
+    def seal(self, data: bytes) -> str:
+        ciphertext = self._siv().encrypt(data, [_AAD])  # no nonce — deterministic
+        return encode_token({"cipher": "aes-siv"}, ciphertext)
+
+    def unseal(self, token: str) -> bytes:
+        header, ciphertext = decode_token(token)
+        if header.get("cipher") != "aes-siv":
+            raise CipherKitError(
+                f"Aes256SivCipher cannot unseal a {header.get('cipher')!r} token."
+            )
+        try:
+            return self._siv().decrypt(ciphertext, [_AAD])
+        except Exception as exc:  # noqa: BLE001
+            raise DecryptionError(
+                "AES-SIV decryption failed — wrong key or tampered token."
+            ) from exc
+
+
+class AesGcmSivCipher(Cipher):
+    """AES-GCM-SIV (RFC 8452) — AEAD with **nonce-misuse resistance**.
+
+    Like AES-GCM, but accidentally repeating a nonce only leaks equality of the
+    duplicated messages rather than catastrophically breaking the key.  A fresh
+    random 12-byte nonce is used per token (so output is non-deterministic).
+
+    Needs a 16- or 32-byte key (AES-128/256-GCM-SIV); see
+    :func:`cipher_kit.generate_aead_key`.  Supply the same key to seal/unseal.
+    """
+
+    def __init__(self, key: bytes):
+        if not isinstance(key, (bytes, bytearray)):
+            raise CipherKitError("AesGcmSivCipher key must be raw bytes.")
+        if len(key) not in (16, 32):
+            raise CipherKitError(
+                f"AesGcmSivCipher needs a 16- or 32-byte key, got {len(key)} bytes."
+            )
+        self._key = bytes(key)
+
+    def _aead_obj(self):
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCMSIV
+
+        return AESGCMSIV(self._key)
+
+    def seal(self, data: bytes) -> str:
+        nonce = os.urandom(_NONCE_LEN)
+        ciphertext = self._aead_obj().encrypt(nonce, data, _AAD)
+        header = {"cipher": "aes-gcm-siv", "nonce": b64e(nonce)}
+        return encode_token(header, ciphertext)
+
+    def unseal(self, token: str) -> bytes:
+        header, ciphertext = decode_token(token)
+        if header.get("cipher") != "aes-gcm-siv":
+            raise CipherKitError(
+                f"AesGcmSivCipher cannot unseal a {header.get('cipher')!r} token."
+            )
+        nonce = b64d(header["nonce"])
+        try:
+            return self._aead_obj().decrypt(nonce, ciphertext, _AAD)
+        except Exception as exc:  # noqa: BLE001
+            raise DecryptionError(
+                "AES-GCM-SIV decryption failed — wrong key or tampered token."
             ) from exc
 
 

@@ -87,6 +87,41 @@ assert back.unseal(token) == "top secret"
 
 `seal` 依序套層、`unseal` 反序剝層；每層各自產生自描述 token，可自由混搭演算法與金鑰。
 
+## 自管金鑰的 cipher（已有 32-byte 金鑰、不想走 KDF）
+
+上面的 `PasswordCipher` 把人類密碼用 KDF 拉長成金鑰。如果你**已經握有一把強金鑰**（來自 KMS / HSM / `OsKeyring` / `generate_*_key()`），可以用這四個「raw-key」cipher，省掉 KDF 成本。它們同樣是自描述 `CK1` token，模組級 `unseal(token, secret_key=...)` 會依 header 自動派發，也都能放進 `LayeredCipher`。
+
+| cipher | header `cipher` | 金鑰 | 特性 | 工廠 |
+|---|---|---|---|---|
+| `FernetCipher` | `fernet` | `generate_fernet_key()`（44-char b64） | 自帶時間戳/版本 | `CipherKit.fernet(key)` |
+| `RawKeyCipher` | `rawkey` | `generate_aead_key()`（32 bytes） | AEAD（AES-256-GCM / ChaCha20），隨機 nonce | `CipherKit.raw_key(key, aead=...)` |
+| `Aes256SivCipher` | `aes-siv` | `generate_aes_siv_key()`（64 bytes） | **確定性**、nonce-misuse 抗性 | `CipherKit.aes_siv(key)` |
+| `AesGcmSivCipher` | `aes-gcm-siv` | `generate_aead_key()`（16/32 bytes） | nonce-misuse 抗性、隨機 nonce | `CipherKit.aes_gcm_siv(key)` |
+
+```python
+from isd_py_framework_sdk.cipher_kit import (
+    seal, unseal, CipherKit, generate_aead_key, generate_aes_siv_key, generate_fernet_key,
+)
+
+# RawKey：模組級 seal 直接吃 secret_key（最無腦）
+k = generate_aead_key()                       # 32 bytes
+tok = seal("payload", secret_key=k)           # header cipher = 'rawkey'
+assert unseal(tok, secret_key=k) == "payload"
+
+# Fernet / AES-GCM-SIV：用工廠
+fk = generate_fernet_key()
+tok = CipherKit.fernet(fk).seal("x")
+assert unseal(tok, secret_key=fk) == "x"      # 模組級 unseal 自動派發
+
+# AES-SIV：確定性——同明文同金鑰 → 同 token（可做去重 / 盲索引）
+sk = generate_aes_siv_key()                    # 64 bytes
+assert CipherKit.aes_siv(sk).seal("same") == CipherKit.aes_siv(sk).seal("same")
+```
+
+> **確定性是雙面刃**：`Aes256SivCipher` 讓相同明文得到相同密文（方便比對 / 去重），代價是會洩漏「兩個值是否相同」。不希望這個性質時，請用隨機化的其他 cipher。
+>
+> 注意這些是**自管金鑰**：金鑰要與密文放在不同來源（同 `KeySource` 原則）；金鑰遺失即資料遺失。
+
 ## 安裝
 
 ```bash
