@@ -57,9 +57,44 @@ from isd_py_framework_sdk.cipher_kit import EnvSecret
 key = load_secret("OPENAI_API_KEY", key_source=EnvSecret("APP_MASTER_PASS"))
 ```
 
+## ⭐ 任意檔案 + 任意 tag + 執行時輸密碼（永不存檔）
+
+這是本套件的招牌能力：「從**任意 `.env`**、用**任意 key 名**、密碼**執行時才輸入、絕不落地**」地解密。很多下游專案卡在「金鑰管理」，其實這裡一行就能做到。
+
+**最簡：`prompt_password=True`**（不必自己 import 任何東西，缺密碼時 `getpass` 互動輸入）：
+
+```python
+from isd_py_framework_sdk.credential_vault import CredentialVault
+
+vault = CredentialVault(["os_env", "chatgpt_local.env"])      # 任意檔案
+key   = vault.get("ENC_API_KEY", prompt_password=True)        # 任意 tag + 執行時輸入、永不存檔
+
+# 一次性版本：
+from isd_py_framework_sdk.credential_vault import load_secret
+key = load_secret("ENC_API_KEY", env_path="chatgpt_local.env", prompt_password=True)
+```
+
+**完整版（等價、可自訂提示字串等）**：用 `key_source=PromptSecret()`：
+
+```python
+from isd_py_framework_sdk.credential_vault import CredentialVault
+from isd_py_framework_sdk.cipher_kit import PromptSecret
+
+vault = CredentialVault(["os_env", "chatgpt_local.env"])
+key   = vault.get("ENC_API_KEY", key_source=PromptSecret("API 金鑰密碼："))
+```
+
+重點：
+
+- **任意檔案** → `CredentialVault([..., "some_file.env"])` 或 `load_secret(key, env_path=...)`。
+- **任意 tag** → 直接給 key 名，沒有寫死 `chatgpt` / `gemini`。
+- **執行時密碼、不存檔** → `prompt_password=True`（底層 `getpass`，永不寫入任何檔案）。
+- `prompt_password=True` 只有在「值真的是 `CK1` token」時才會跳出輸入提示；**純文字值不會提示、直接回傳**。
+- 若同時給了 `password=` / `key_source=`，以顯式金鑰為準，不會跳輸入。
+
 ## 透明解密的判斷規則
 
-`get()` 只有在「值是字串且以 `CK1.` 開頭」「且有提供金鑰（`password` / `key_source` / `private_key`）」時才解密；否則原值直接回傳。**所以讀純文字值永遠不會載入 `cryptography`。**
+`get()` 只有在「值是字串且以 `CK1.` 開頭」「且有提供金鑰（`password` / `key_source` / `private_key` / `prompt_password=True`）」時才解密；否則原值直接回傳。**所以讀純文字值永遠不會載入 `cryptography`。**
 
 沒給金鑰時 sealed token 會原樣回傳（不自動解）——要解密務必帶金鑰參數。
 
@@ -79,6 +114,17 @@ pip install isd-py-framework-sdk[credential_vault.yaml]    # + pyyaml（YAML 來
 ```
 
 JSON 與系統環境變數走 stdlib，零依賴。透明解密需另裝 `cipher_kit` extra（見其 README）。
+
+## 對外橋接依賴
+
+`credential_vault` 只在**真的要解一個 `CK1` token** 時，才透過 [`interop`](../interop/README.md) 橋接到 `cipher_kit`：
+
+| 觸發時機 | 被用到的子套件 | 需要的 extra |
+|---|---|---|
+| `get()` / `load_secret()` 讀到 `CK1.` token 且帶金鑰材料（含 `prompt_password=True`） | `cipher_kit` | `cipher_kit`（`cryptography`） |
+
+- **讀純文字值完全不碰 `cipher_kit`／`cryptography`**——只裝 `[credential_vault]` 的人完全沒問題。
+- 只有解 token 那一刻才會要求 `cipher_kit`；若沒裝，會丟出標準訊息 `pip install isd-py-framework-sdk[cipher_kit]`（由 `interop.require_feature` 統一處理）。
 
 ## 注意事項
 

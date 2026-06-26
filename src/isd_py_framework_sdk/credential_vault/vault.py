@@ -83,6 +83,7 @@ class CredentialVault:
         password: str | None = None,
         key_source=None,
         private_key=None,
+        prompt_password: bool = False,
         decrypt: bool = True,
         required: bool = True,
         encoding: str = "utf-8",
@@ -90,8 +91,18 @@ class CredentialVault:
         """Return the value for *key*, transparently unsealing ``CK1`` tokens.
 
         Decryption happens only when ``decrypt`` is true, the value looks like a
-        token, and key material (``password`` / ``key_source`` / ``private_key``)
-        is available.  Otherwise the raw value is returned.
+        token, and key material is available.  Otherwise the raw value is
+        returned untouched.
+
+        Key material can be:
+
+        * ``password=`` / ``key_source=`` — passphrase-based symmetric tokens;
+        * ``private_key=`` — RSA-hybrid tokens;
+        * ``prompt_password=True`` — a one-liner for "ask me the passphrase at
+          runtime and never store it".  When set (and no explicit ``password`` /
+          ``key_source`` / ``private_key`` is given), the passphrase is read via
+          ``getpass`` only if the stored value is actually a sealed token.  Plain
+          values are returned without ever prompting.
 
         Raises :class:`KeyError` when the key is absent and ``required`` is true
         with no ``default`` supplied.
@@ -106,13 +117,35 @@ class CredentialVault:
                 )
             return None
 
+        has_key_material = (
+            password is not None
+            or key_source is not None
+            or private_key is not None
+            or prompt_password
+        )
         if (
             decrypt
             and isinstance(value, str)
             and value.startswith(_TOKEN_PREFIX)
-            and (password is not None or key_source is not None or private_key is not None)
+            and has_key_material
         ):
-            from isd_py_framework_sdk import cipher_kit  # lazy: only when decrypting
+            # Cross-module bridge, routed through interop so a partial install
+            # (credential_vault without cipher_kit) fails with the SDK's
+            # standard "pip install ...[cipher_kit]" message. Lazy: only when we
+            # actually need to decrypt a token.
+            from ..interop import require_feature
+
+            cipher_kit = require_feature("cipher_kit")
+
+            # Sugar: prompt for the passphrase at runtime (getpass, never
+            # stored) when asked and no explicit key material was supplied.
+            if (
+                prompt_password
+                and password is None
+                and key_source is None
+                and private_key is None
+            ):
+                key_source = cipher_kit.PromptSecret()
 
             return cipher_kit.unseal(
                 value,
@@ -153,6 +186,7 @@ def load_secret(
     password: str | None = None,
     key_source=None,
     private_key=None,
+    prompt_password: bool = False,
     default=_NO_DEFAULT,
     required: bool = True,
     decrypt: bool = True,
@@ -163,7 +197,11 @@ def load_secret(
     Equivalent to building a :class:`CredentialVault` over
     ``["os_env", env_path or ".env"]`` and calling :meth:`~CredentialVault.get`.
     Pass ``password=`` / ``key_source=`` / ``private_key=`` to auto-unseal a
-    sealed value.
+    sealed value, or ``prompt_password=True`` to be asked for the passphrase at
+    runtime (via ``getpass``, never stored)::
+
+        api_key = load_secret("ENC_API_KEY", env_path="chatgpt_local.env",
+                              prompt_password=True)
     """
     vault = CredentialVault(
         sources=["os_env", env_path if env_path else ".env"], search_from=search_from
@@ -174,6 +212,7 @@ def load_secret(
         password=password,
         key_source=key_source,
         private_key=private_key,
+        prompt_password=prompt_password,
         decrypt=decrypt,
         required=required,
         encoding=encoding,
