@@ -1,9 +1,35 @@
+import logging
 import os
 import weakref
 from collections import defaultdict
 from typing import Callable, Dict, List, Optional, Type, Union, overload
 
 from isd_py_framework_sdk.events.EventBase import IEventBase, IParsEventBase
+
+# 用標準庫 logging（而非 message_logger）保持 events 子套件解耦、零相依。
+# 消費端可用標準 logging 設定來決定要不要看這些訊息。
+_logger = logging.getLogger(__name__)
+
+
+def _reject_lambda(callback: Callable) -> None:
+    """
+    事件 callback 必須是「明確持有」的具名可呼叫物件——bound method
+    (``self.method``) 或 module-level / static 函式。
+
+    lambda（以及其他沒有強引用持有者的匿名 closure）會被本管理器的弱引用
+    機制立即 GC 掉，造成無聲失效、且無法可靠解除註冊。因此在「註冊當下」
+    就明確拒絕，而不是等到觸發時才神隱——把規則寫死，省掉逐案推理生命週期
+    的 code-review 負擔。
+    """
+    if getattr(callback, "__name__", "") == "<lambda>":
+        raise TypeError(
+            "Event callbacks must be a named, strongly-held callable — a bound "
+            "method like `self.method`, or a module-level / static function. "
+            "Lambdas are rejected because the weak-reference registry would "
+            "garbage-collect them immediately, causing silent failure and making "
+            "them impossible to unregister. Assign your logic to a named "
+            "method/function and register that instead."
+        )
 
 
 class _WeakCallable:
@@ -71,6 +97,7 @@ class SingletonEventManager:
             raise ValueError("Callback cannot be None")
         if not isinstance(event_class, type):
             raise TypeError("event_class must be an event class (e.g., OnMyEvent), not an instance.")
+        _reject_lambda(callback)
 
         target_dict = self._get_target_event_lists(event_class)
         target_dict[event_class].append(_WeakCallable(callback))
@@ -99,7 +126,10 @@ class SingletonEventManager:
             if wm() is not None and wm != weak_callback_to_remove
         ]
         if len(target_dict[event_class]) == original_len:
-            print(f"Warning: Callback for {event_class.__name__} not found or already unregistered.")
+            _logger.warning(
+                "Callback for %s not found or already unregistered.",
+                event_class.__name__,
+            )
 
     def TriggerEvent(self, event_instance: Union[IEventBase, IParsEventBase]) -> None:
         if not isinstance(event_instance, (IEventBase, IParsEventBase)):
@@ -112,18 +142,32 @@ class SingletonEventManager:
         alive_callbacks: List[_WeakCallable] = []
         for weak_callback in callbacks:
             callback_func = weak_callback()
-            if callback_func is not None:
-                try:
-                    if isinstance(event_instance, IParsEventBase):
-                        callback_func(event_instance)
-                    elif isinstance(event_instance, IEventBase):
-                        callback_func()
-                    alive_callbacks.append(weak_callback)
-                except TypeError as e:
-                    print(
-                        f"Error calling callback for {event_type.__name__}: {e}. Make sure callback signature matches event type.")
-            else:
-                print(f"Callback for {event_type.__name__} was garbage collected.")
+
+            # A 類：訂閱者已不在（持有者被刪 / GC，weakref 回 None）。
+            # 這是正常生命週期、不是錯誤 → 安靜丟棄（不保留、不吵）。
+            if callback_func is None:
+                _logger.debug(
+                    "Callback for %s was garbage collected; dropping from registry.",
+                    event_type.__name__,
+                )
+                continue
+
+            # 訂閱者仍存活：先保留註冊，確保「執行時拋例外」不會害它被退訂。
+            alive_callbacks.append(weak_callback)
+
+            # B 類：訂閱者活著但 body 拋例外 → 真正的 bug。
+            # 大聲記錄（ERROR + traceback）但隔離：不連累其他 handler、也不退訂它。
+            try:
+                if isinstance(event_instance, IParsEventBase):
+                    callback_func(event_instance)
+                else:
+                    callback_func()
+            except Exception:
+                _logger.exception(
+                    "Handler for %s raised an exception; isolated, remaining "
+                    "handlers continue and this handler stays registered.",
+                    event_type.__name__,
+                )
 
         target_dict[event_type] = alive_callbacks
 

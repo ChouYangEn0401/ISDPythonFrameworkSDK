@@ -163,3 +163,27 @@ class LoggerBase:
         if self._shift_amount < 0:
             self._shift_amount = 0
 
+    # --- 已移除的歷史 API（保留「可被偵測」的遷移指引）-------------------------
+    # set_min_level / set_window 屬於舊版 logger 設計，已於 adapter 化重構時移除。
+    # 舊呼叫端若直接撞 AttributeError 只會看到「沒這個屬性」、毫無頭緒；這裡保留
+    # 會主動拋出「帶遷移指引」訊息的 stub，讓人一眼知道改用什麼。
+    # 註：刻意手寫 raise，而非套用 helpers.decorators 的 removed_in，以維持
+    #     message_logger 的 self-contained（只依賴 base + 核心 _optional，不 import
+    #     其他 feature 子套件）。
+
+    def set_min_level(self, *args, **kwargs):
+        raise AttributeError(
+            "`set_min_level` 已於 adapter 化重構時移除。"
+            "全域等級改由環境變數 RUN_MODE 控制（DEBUG / DISPLAY / RUN）；"
+            "個別輸出目標的等級由各 adapter 的 level_filter 決定，例如："
+            'register_adapter(DarkThemeTerminalAdapter(level_filter="INFO")).'
+        )
+
+    def set_window(self, *args, **kwargs):
+        raise AttributeError(
+            "`set_window` 已於 adapter 化重構時移除。"
+            "請改用 Tkinter adapter，例如："
+            'register_adapter(DarkThemeTkinterAdapter("INFO", tk_window=your_widget)).'
+            "（注意：Tkinter widget 僅能於主執行緒操作。）"
+        )
+

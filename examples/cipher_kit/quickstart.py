@@ -20,6 +20,9 @@ from isd_py_framework_sdk.cipher_kit import (
     CipherKit,
     PasswordCipher,
     RsaHybridCipher,
+    generate_aead_key,
+    generate_aes_siv_key,
+    generate_fernet_key,
     generate_rsa_keypair,
     seal,
     unseal,
@@ -74,9 +77,40 @@ def demo_layered():
     print("layered unseal:", unsealer.unseal(token))
 
 
+def demo_raw_key_ciphers():
+    print("\n=== 5) Self-managed-key ciphers (no KDF): Fernet / RawKey / AES-SIV / AES-GCM-SIV ===")
+
+    # RawKey — module-level seal() takes a raw 32-byte key directly.
+    raw = generate_aead_key()
+    tok = seal("payload", secret_key=raw)
+    print("rawkey       :", unseal(tok, secret_key=raw))
+    assert unseal(tok, secret_key=raw) == "payload"
+
+    # Fernet — via factory; module-level unseal auto-routes by token header.
+    fk = generate_fernet_key()
+    tok = CipherKit.fernet(fk).seal("sk-fernet")
+    print("fernet       :", unseal(tok, secret_key=fk))
+    assert unseal(tok, secret_key=fk) == "sk-fernet"
+
+    # AES-GCM-SIV — nonce-misuse resistant, randomised.
+    gk = generate_aead_key()
+    tok = CipherKit.aes_gcm_siv(gk).seal("payload")
+    print("aes-gcm-siv  :", unseal(tok, secret_key=gk))
+    assert unseal(tok, secret_key=gk) == "payload"
+
+    # AES-SIV — DETERMINISTIC: same plaintext + key → same token (dedupable).
+    sk = generate_aes_siv_key()
+    a = CipherKit.aes_siv(sk).seal("same")
+    b = CipherKit.aes_siv(sk).seal("same")
+    print("aes-siv det. :", a == b, "(same plaintext+key → same token)")
+    assert a == b
+    assert unseal(a, secret_key=sk) == "same"
+
+
 if __name__ == "__main__":
     demo_basic()
     demo_store_and_load()
     demo_rsa()
     demo_layered()
+    demo_raw_key_ciphers()
     print("\nAll demos completed.")

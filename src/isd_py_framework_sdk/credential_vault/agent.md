@@ -4,7 +4,7 @@
 
 便利、環境感知地從 `.env` / YAML / JSON / 系統環境變數載入設定與祕密，並對 [`cipher_kit`](../cipher_kit/agent.md) 封好的值做**透明解密**。是把分散的「找 .env、讀 key、解密」邏輯收斂成一個乾淨入口的載入層，並對 PyInstaller 打包環境友善（凍結時會去 exe 旁邊找檔案）。
 
-與 `cipher_kit` 的分工：`cipher_kit` 負責「封」，`credential_vault` 負責「讀 + 透明解」。依賴方向：`credential_vault → cipher_kit`（且只在真的要解密某個 token 時才 lazy import `cryptography`）。
+與 `cipher_kit` 的分工：`cipher_kit` 負責「封」，`credential_vault` 負責「讀 + 透明解」。依賴方向：`credential_vault → cipher_kit`，且**經由 [`interop.require_feature("cipher_kit")`](../interop/agent.md)** 取得（只在真的要解某個 token 時才呼叫；缺 `cryptography` 時丟標準 `MissingOptionalDependencyError`）。
 
 ---
 
@@ -52,7 +52,11 @@ url  = vault.get("MISSING", default="sqlite://")           # 找不到給 defaul
 
 ### 透明解密的判斷邏輯
 
-`get()` 只有在「啟用 `decrypt`」「值是字串且以 `CK1.` 開頭」「且有提供金鑰（`password` / `key_source` / `private_key`）」三者皆成立時，才呼叫 `cipher_kit.unseal`。否則原值直接回傳——所以**讀純文字值永遠不會載入 `cryptography`**。
+`get()` 只有在「啟用 `decrypt`」「值是字串且以 `CK1.` 開頭」「且有提供金鑰（`password` / `key_source` / `private_key` / `prompt_password=True`）」三者皆成立時，才呼叫 `cipher_kit.unseal`。否則原值直接回傳——所以**讀純文字值永遠不會載入 `cryptography`**。
+
+### `prompt_password=`（執行時輸密碼的糖）
+
+`get()` / `load_secret()` 的 `prompt_password=True` 是「執行時輸入密碼、永不存檔」的便利開關：當值是 `CK1` token 且未給其他金鑰材料時，內部經 `interop.require_feature("cipher_kit")` 取得 `PromptSecret()`（底層 `getpass`）當 `key_source`。等價於手動 `key_source=PromptSecret()`，但呼叫端不必認識/ import 它。純文字值**不會**觸發提示；顯式 `password=`/`key_source=` 優先於 `prompt_password`。
 
 ### `get_secret`（強制加密）
 
@@ -80,7 +84,20 @@ vault.get_secret("API_KEY", password="my-passphrase")   # 必須是 CK1 token，
    from isd_py_framework_sdk.credential_vault import load_secret
    from isd_py_framework_sdk.cipher_kit import EnvSecret
    key = load_secret("OPENAI_API_KEY", key_source=EnvSecret("APP_MASTER_PASS"))
+
+   # 或：任意檔案 + 任意 tag + 執行時輸密碼（永不存檔）——一行搞定
+   key = load_secret("ENC_API_KEY", env_path="chatgpt_local.env", prompt_password=True)
    ```
+
+---
+
+## 對外橋接依賴
+
+| 觸發時機 | 被用到的子套件 | 需要的 extra |
+|---|---|---|
+| `get()` / `load_secret()` 讀到 `CK1.` token 且帶金鑰材料（含 `prompt_password=True`） | `cipher_kit` | `cipher_kit`（`cryptography`） |
+
+唯一的跨模組呼叫，經 `interop.require_feature("cipher_kit")`（見 [`interop/agent.md`](../interop/agent.md) 橋接表 #1）。讀純文字值完全不碰此橋；只裝 `[credential_vault]`、不裝 `[cipher_kit]` 的人讀純文字毫無問題，只有解 token 時才會拿到 `pip install isd-py-framework-sdk[cipher_kit]` 的提示。
 
 ---
 

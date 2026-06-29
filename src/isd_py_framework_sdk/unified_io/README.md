@@ -88,6 +88,16 @@ DataIO.write(
 
 `mode="preserve"` 同樣依賴 `excel_painter` 的 `SheetFormatSnapshot`。範例見 `examples/excel_painter/io_integration.py`。
 
+## 對外橋接依賴
+
+`unified_io` 只在**寫 Excel 且走 `styled` / `preserve` 模式**時，才透過 [`interop`](../interop/README.md) 橋接到 `excel_painter`：
+
+| 觸發時機 | 被用到的子套件 | 需要的 extra |
+|---|---|---|
+| 寫 Excel：`mode="styled"`（或傳 `style=`）／`mode="preserve"` | `excel_painter` | `excel_painter`（`openpyxl`+`wcwidth`） |
+
+`fresh` / `inplace` 模式與 CSV / JSON / SQL 不經過此橋。缺 `openpyxl` 時會丟出標準訊息 `pip install isd-py-framework-sdk[excel_painter]`（由 `interop.require_feature` 統一處理）；`[unified_io.excel]` 已透過自我引用一併帶入 `excel_painter`。
+
 ## 依賴 Extras
 
 ```bash

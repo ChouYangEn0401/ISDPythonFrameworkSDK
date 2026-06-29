@@ -36,8 +36,14 @@ class OnDataLoaded(IParsEventBase):
 - **綁定方法**（bound methods）— 以 `WeakMethod` 保存，不會延長物件生命週期
 - **普通 callable**（module-level functions、static methods）— 以 `weakref.ref` 保存
 
-> **注意：** lambda / local closure 沒有強引用持有者，訂閱後可能立即被 GC 回收。
-> 必須由呼叫端自行保留其強引用，或改用具名的普通函式 / 方法。
+> **lambda 一律被拒絕：** callback 必須是「明確持有」的具名可呼叫物件。傳入 lambda 會在
+> `RegisterEvent` 當下直接 `raise TypeError`（不是事後無聲消失）。原因是弱引用會把沒有強引用
+> 持有者的匿名 closure 立即 GC 掉，造成無聲失效且無法解除註冊——把規則寫死、省掉逐案推理生命
+> 週期的負擔。請改用 `self.method` 或 module-level / static 函式。
+>
+> **觸發時的錯誤隔離：** 某個 handler 內部拋例外時會被「隔離」——以 ERROR 等級記錄
+> （含 traceback，走標準庫 `logging`），但**其他 handler 照常觸發、拋例外的 handler 也不會被
+> 退訂**。一個壞訂閱者不會連累其他訂閱者，也不會悄悄消失。
 
 ```python
 from isd_py_framework_sdk.events_bus import SingletonEventManager, IEventBase, IParsEventBase

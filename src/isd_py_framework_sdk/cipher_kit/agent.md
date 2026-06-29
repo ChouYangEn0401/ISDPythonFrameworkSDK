@@ -19,7 +19,8 @@ cipher_kit/
 ├── envelope.py        版本化自描述 token 格式（純 stdlib，認得 token 不需 cryptography）
 ├── kdf.py             金鑰派生：argon2id → scrypt → pbkdf2-sha256
 ├── key_sources.py     passphrase 來源：Raw / Env / Prompt / KeyFile / OsKeyring
-├── ciphers.py         Cipher ABC + Identity / Password / RsaHybrid / Layered
+├── keygen.py          raw-key 產生器：generate_fernet_key / generate_aead_key / generate_aes_siv_key
+├── ciphers.py         Cipher ABC + Identity / Password / RsaHybrid / Fernet / RawKey / Aes256Siv / AesGcmSiv / Layered
 └── rsa_utils.py       generate_rsa_keypair()
 ```
 
@@ -104,6 +105,31 @@ assert back.unseal(token) == "top secret"
 
 `seal` 依序套層、`unseal` 反序剝層。每層各自產生自描述 token，所以可自由混搭演算法與金鑰。
 
+### 自管金鑰的 raw-key cipher（不走 KDF）
+
+給「已握有強金鑰」的呼叫端。四個都是 `Cipher` 子類、自描述 token、可組進 `LayeredCipher`：
+
+| cipher | header `cipher` | 金鑰 | 特性 |
+|---|---|---|---|
+| `FernetCipher` | `fernet` | `generate_fernet_key()`（44-char url-safe b64） | Fernet（AES-128-CBC + HMAC），自帶時間戳/版本 |
+| `RawKeyCipher` | `rawkey`（另存 `aead` 欄位） | `generate_aead_key()`（32 bytes） | 沿用 `_aead()`（AES-256-GCM / ChaCha20），隨機 nonce |
+| `Aes256SivCipher` | `aes-siv` | `generate_aes_siv_key()`（64 bytes） | AES-256-SIV，**確定性**、無 nonce、nonce-misuse 抗性，AAD 用 `[_AAD]` |
+| `AesGcmSivCipher` | `aes-gcm-siv` | `generate_aead_key()`（16/32 bytes） | RFC 8452，隨機 12-byte nonce、nonce-misuse 抗性 |
+
+### 派發機制（新增 cipher 必懂）
+
+- **模組級 `seal()` 依「key 材料種類」派發**：`public_key=`→RSA、`secret_key=`→`RawKeyCipher`（吃 raw 32-byte 金鑰，AEAD 由 `aead=` 決定）、`password=`/`key_source=`→Password。Fernet / AES-SIV / AES-GCM-SIV 不屬於 `secret_key` 的預設路徑，**透過 `CipherKit.fernet()` / `.aes_siv()` / `.aes_gcm_siv()` 工廠或 cipher 類別直接建立**來封。
+- **模組級 `unseal()` 依 header 的 `cipher` 名派發**，認得：`rsa-hybrid` / `identity` / `aes-256-gcm` / `chacha20-poly1305` / `fernet` / `rawkey` / `aes-siv` / `aes-gcm-siv`。raw-key 四種需傳 `secret_key=`（缺則丟 `MissingKeyError`）；因為 token 自描述，`unseal` 能對**全部**新 cipher 自動派發。
+- **新增 cipher 的 checklist**：① `ciphers.py` 寫 `Cipher` 子類、header 寫唯一 `cipher` 名、`unseal` 自我驗證 header；② `__init__.py` 在 `unseal()` 加 dispatch 分支；③ 視 key 材料種類決定 `seal()` 路徑或加 `CipherKit.<factory>()`；④ 更新 `__all__` 與本表。
+
+```python
+from isd_py_framework_sdk.cipher_kit import (
+    seal, unseal, CipherKit, generate_aead_key, generate_aes_siv_key, generate_fernet_key,
+)
+tok = seal("payload", secret_key=generate_aead_key())   # RawKeyCipher
+assert unseal(tok, secret_key=...)                       # 依 header 自動派發
+```
+
 ---
 
 ## 金鑰來源（`key_sources.py`）
@@ -141,9 +167,11 @@ kit = CipherKit.password(key_source=OsKeyring("my-app", "prod"))
 ```python
 from isd_py_framework_sdk.cipher_kit import (
     seal, unseal, CipherKit,
-    Cipher, IdentityCipher, PasswordCipher, RsaHybridCipher, LayeredCipher,
+    Cipher, IdentityCipher, PasswordCipher, RsaHybridCipher,
+    FernetCipher, RawKeyCipher, Aes256SivCipher, AesGcmSivCipher, LayeredCipher,
     KeySource, RawSecret, EnvSecret, PromptSecret, KeyFileSource, OsKeyring,
-    generate_rsa_keypair, is_token, decode_token, default_kdf, have_argon2,
+    generate_rsa_keypair, generate_fernet_key, generate_aead_key, generate_aes_siv_key,
+    is_token, decode_token, default_kdf, have_argon2,
     CipherKitError, InvalidTokenError, DecryptionError,
     MissingDependencyError, MissingKeyError,
 )

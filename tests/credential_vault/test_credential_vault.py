@@ -185,3 +185,63 @@ def test_load_secret(workspace):
         load_secret("DATABASE_URL", env_path=str(workspace / ".env"))
         == "postgres://localhost/app"
     )
+
+
+# ---------------------------------------------------------------------------
+# 7. prompt_password sugar (runtime passphrase via getpass, never stored)
+# ---------------------------------------------------------------------------
+
+def test_prompt_password_unseals_token(workspace, monkeypatch):
+    import getpass
+
+    monkeypatch.setattr(getpass, "getpass", lambda *a, **k: PW)
+    v = CredentialVault([str(workspace / ".env")])
+    assert v.get("API_KEY", prompt_password=True) == "sk-REAL-secret"
+
+
+def test_prompt_password_plain_value_never_prompts(workspace, monkeypatch):
+    import getpass
+
+    called = {"n": 0}
+
+    def boom(*a, **k):
+        called["n"] += 1
+        raise AssertionError("getpass must not be called for a plain value")
+
+    monkeypatch.setattr(getpass, "getpass", boom)
+    v = CredentialVault([str(workspace / ".env")])
+    # Plain value: prompt_password=True must NOT trigger a prompt.
+    assert v.get("DATABASE_URL", prompt_password=True) == "postgres://localhost/app"
+    assert called["n"] == 0
+
+
+def test_prompt_password_wrong_passphrase_raises(workspace, monkeypatch):
+    import getpass
+
+    from isd_py_framework_sdk.cipher_kit import DecryptionError
+
+    monkeypatch.setattr(getpass, "getpass", lambda *a, **k: "WRONG")
+    v = CredentialVault([str(workspace / ".env")])
+    with pytest.raises(DecryptionError):
+        v.get("API_KEY", prompt_password=True)
+
+
+def test_load_secret_prompt_password(workspace, monkeypatch):
+    import getpass
+
+    monkeypatch.setattr(getpass, "getpass", lambda *a, **k: PW)
+    assert (
+        load_secret("API_KEY", env_path=str(workspace / ".env"), prompt_password=True)
+        == "sk-REAL-secret"
+    )
+
+
+def test_explicit_password_takes_precedence_over_prompt(workspace, monkeypatch):
+    import getpass
+
+    def boom(*a, **k):
+        raise AssertionError("explicit password should win; getpass not called")
+
+    monkeypatch.setattr(getpass, "getpass", boom)
+    v = CredentialVault([str(workspace / ".env")])
+    assert v.get("API_KEY", password=PW, prompt_password=True) == "sk-REAL-secret"
