@@ -228,6 +228,7 @@ API 演進（改名 / 移除 / 實驗性）的對外通知，沿用 `helpers/dec
 ## 已知注意事項
 
 - `DelayEventBusManager`（延遲事件匯流排）標記為 `==NEW-STRUCTURE-UNDONE==`，屬於未完成功能，設計仍在迭代中。
+- `events`（`SingletonEventManager`）的 callback 以**弱引用**保存（bound method→`WeakMethod`、plain callable→`weakref.ref`），故 callback 必須是「明確持有」的具名物件：**`RegisterEvent` 直接拒絕 lambda（拋 `TypeError`）**，請改用 `self.method` 或 module-level / 具名 closure（`MulticastCallback` 不受此限）。觸發時分兩類處理：持有者已 GC（weakref→None）→ 安靜丟棄；handler body 拋例外 → `logging.exception` 記錄但**隔離**（不連累其他 handler、不退訂）。events 用標準庫 `logging`（logger 名 `isd_py_framework_sdk.events`），不耦合 `message_logger`。
 - `path_manager` 在多進程（`multiprocessing`）下，每個子進程有獨立 singleton；需在子進程中重新設定，或未來透過 `to_dict()`/`from_dict()` 序列化（見 `path_manager/dev_plan.md` §6）。
 - `message_logger` 的 Tkinter adapter 只能在主執行緒使用 widget；跨執行緒 logging 需搭配 `widget.after()` + `queue.Queue`。
 - `unified_io/.env` 不應版控（`.gitignore` 以 `**/.env` 排除；該檔含真實 MSSQL 憑證，切勿提交）。
