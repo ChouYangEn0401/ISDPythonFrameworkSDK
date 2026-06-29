@@ -11,7 +11,7 @@
 |---|---|
 | pip 安裝名 | `isd-py-framework-sdk` |
 | Python import 名 | `isd_py_framework_sdk` |
-| 版本 | `0.7.0` |
+| 版本 | `0.9.1` |
 | Python 需求 | `>= 3.11` |
 
 ---
