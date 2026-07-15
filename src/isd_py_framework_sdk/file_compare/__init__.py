@@ -56,7 +56,40 @@ def compare_yaml_files(*args, **kwargs):
     return _lazy_attr("yaml_unittest_module", "compare_yaml_files")(*args, **kwargs)
 
 
+def assert_compare(result: "CompareResult", *, max_errors: int = 15) -> None:
+    """Assert that a :class:`CompareResult` represents a passing comparison.
+
+    - If ``result.passed`` is ``True``, returns immediately.
+    - Otherwise raises ``AssertionError`` with the label and the first
+      *max_errors* error messages.
+
+    Duck-typed objects with ``.passed``, ``.label``, and ``.errors`` attributes
+    are also accepted.
+
+    Usage::
+
+        assert_compare(compare_csv_files(cfg))
+        assert_compare(compare_excel_sheets(cfg))
+    """
+    if result.passed:
+        return
+    lines = [f"比對失敗: {result.label}", f"共 {len(result.errors)} 個錯誤:"]
+    for err in result.errors[:max_errors]:
+        lines.append(f"  - {err}")
+    if len(result.errors) > max_errors:
+        lines.append(f"  ... 以及其餘 {len(result.errors) - max_errors} 個錯誤")
+    raise AssertionError("\n".join(lines))
+
+
+def __getattr__(name: str) -> Any:
+    if name == "CompareResult":
+        return _lazy_attr("_shared", "CompareResult")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
+    "CompareResult",
+    "assert_compare",
     "compare_csv_files",
     "compare_excel_sheets",
     "compare_ini_files",
