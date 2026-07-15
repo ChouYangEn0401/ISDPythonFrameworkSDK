@@ -28,6 +28,8 @@ from openpyxl import load_workbook
 from typing import Dict, Any
 from openpyxl.utils import get_column_letter
 
+from .._shared import CompareResult
+
 # color / formatting
 GREEN = "\033[92m"
 RED = "\033[91m"
@@ -46,7 +48,7 @@ def colorize_diff(actual, expected) -> str:
     )
 
 
-def compare_excel_sheets(config: Dict[str, Any]):
+def compare_excel_sheets(config: Dict[str, Any]) -> CompareResult:
     """
     基於 Config 的 Excel 核對函數
     - 無 skip → 完全維持原行為
@@ -66,6 +68,10 @@ def compare_excel_sheets(config: Dict[str, Any]):
 
     # 全域預設要顯示的錯誤行數（可由 config 調整）
     global_max_display = config.get("max_display_errors", 15)
+
+    # 跨 sheet 累計結果
+    all_errors: list[str] = []
+    all_real_errors: int = 0
 
     for sheet_conf in config['sheets']:
         t_name = sheet_conf['target_sheet']
@@ -260,4 +266,11 @@ def compare_excel_sheets(config: Dict[str, Any]):
 
             if len(errors) > max_display:
                 print(f"    ... 以及其餘 {len(errors) - max_display} 個錯誤")
+
+        # 累計跨 sheet 結果
+        all_errors.extend(errors)
+        all_real_errors += real_errors
+
+    label = f"Excel 比對 {target_path}"
+    return CompareResult(label=label, passed=(all_real_errors == 0), errors=all_errors)
 
