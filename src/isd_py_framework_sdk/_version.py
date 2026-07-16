@@ -1,2 +1,2 @@
-__version__ = "0.9.1"
+__version__ = "0.9.2"
 # BigChangesCode[x].VersionCode[0-10].HotfixOrUpdate[0-10-100]
